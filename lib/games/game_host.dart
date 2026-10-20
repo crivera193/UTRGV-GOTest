@@ -114,7 +114,12 @@ class _DebugPreviewLauncherState extends State<DebugPreviewLauncher> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('DEBUG ONLY · preview launcher')),
+    appBar: AppBar(
+      title: const Text('UTRGV-GO'),
+      actions: const [
+        Padding(padding: EdgeInsets.all(12), child: Text('DEBUG ONLY')),
+      ],
+    ),
     body: SafeArea(
       child: Center(
         child: FilledButton(
@@ -245,7 +250,7 @@ class _GameHostState extends State<GameHost>
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
       automaticallyImplyLeading: false,
-      title: const Text('Game preview'),
+      title: const Text('UTRGV-GO'),
       actions: [
         TextButton(
           onPressed: () => _exit(GameExit.previewClosed),

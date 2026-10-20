@@ -6,6 +6,7 @@ with a bounding rectangle. No Mapbox tiles or proprietary imagery are consumed.
 """
 import json
 import hashlib
+import math
 from datetime import datetime, timezone
 import re
 import sys
@@ -14,7 +15,8 @@ import xml.etree.ElementTree as ET
 from collections import Counter
 from pathlib import Path
 from shapely.geometry import LineString, Polygon, mapping, shape
-from shapely.ops import polygonize, unary_union
+from shapely.geometry.polygon import orient
+from shapely.ops import polygonize, unary_union, transform
 from shapely.validation import make_valid
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -77,8 +79,28 @@ def main():
                     if needle.lower() in name.lower():
                         props['label'] = label
                         break
-                props['color'] = '#ef9856' if props.get('label') in ('Student Union', 'Library') else '#d5c7a7'
+                props['color'] = '#ef9856' if props.get('label') in ('Student Union', 'Library') else '#e6ddc3'
+            if part.geom_type == 'Polygon':
+                part = orient(part, sign=1)
             features.append({'type': 'Feature', 'properties': props, 'geometry': mapping(part)})
+            if part.geom_type == 'LineString' and kind in ('road', 'path'):
+                # Cartographic route surfaces in local meters, not screen pixels.
+                # Always re-clip AFTER buffering so a road edge cannot escape campus.
+                scale_x = 111320 * math.cos(math.radians(boundary.centroid.y))
+                origin_x, origin_y = boundary.centroid.x, boundary.centroid.y
+                def to_m(x, y, z=None): return ((x-origin_x)*scale_x, (y-origin_y)*111320)
+                def to_geo(x, y, z=None): return (x/scale_x+origin_x, y/111320+origin_y)
+                width = 3.0 if kind == 'path' else (5.5 if tags.get('highway') == 'service' else 9.0)
+                if tags.get('highway') == 'pedestrian': width = 4.0
+                line_m = transform(to_m, part)
+                for suffix, extra in [('edge', 1.3 if kind == 'road' else 0.55), ('surface', 0)]:
+                    surface = transform(to_geo, line_m.buffer(width/2 + extra, cap_style=2, join_style=2)).intersection(boundary)
+                    pieces = surface.geoms if surface.geom_type in ('MultiPolygon', 'GeometryCollection') else [surface]
+                    for piece in pieces:
+                        if piece.geom_type == 'Polygon' and not piece.is_empty:
+                            features.append({'type':'Feature', 'properties':{
+                                'kind':kind+'-'+suffix, 'osm_id':osm_id, 'osm_version':version,
+                                'display_width_m':width+2*extra}, 'geometry':mapping(orient(piece, sign=1))})
 
     for rel in root.findall('relation'):
         tags = {t.get('k'): t.get('v') for t in rel.findall('tag')}
@@ -112,7 +134,8 @@ def main():
     # Stable 7-place coordinates (~1cm) keep the asset small without altering clipping.
     text = re.sub(r'-?\d+\.\d{8,}', lambda m: str(round(float(m.group()), 7)), text)
     (DEST / 'features.geojson').write_text(text + '\n', encoding='utf-8')
-    summary = {'source': URL, 'retrieved_utc': datetime.now(timezone.utc).isoformat(),
+    retrieved = datetime.fromtimestamp(Path(sys.argv[1]).stat().st_mtime, timezone.utc).isoformat() if len(sys.argv) > 1 else datetime.now(timezone.utc).isoformat()
+    summary = {'source': URL, 'retrieved_utc': retrieved, 'generated_utc': datetime.now(timezone.utc).isoformat(),
                'source_sha256': hashlib.sha256(raw).hexdigest(),
                'counts': dict(Counter(f['properties']['kind'] for f in features)),
                'height_basis': dict(Counter(f['properties']['height_basis'] for f in features if f['properties']['kind'] == 'building'))}

@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:campus_app/map/campus_geography.dart';
 import 'package:campus_app/map/campus_location.dart';
 import 'package:campus_app/map/campus_style.dart';
+import 'package:campus_app/map/campus_presentation.dart';
 
 void main() {
   final boundary = File('assets/campus/boundary.geojson').readAsStringSync();
@@ -202,9 +203,72 @@ void main() {
       }
       final layers = reload['layers'] as List;
       expect(layers.map((l) => l['id']).toSet().length, layers.length);
-      expect(layers.where((l) => l['type'] == 'fill-extrusion').length, 1);
+      expect(layers.where((l) => l['id'] == 'campus-buildings').length, 1);
+      // Route/ground meshes are sub-meter display surfaces, not more buildings.
+      for (final layer in layers.where(
+        (l) => l['type'] == 'fill-extrusion' && l['id'] != 'campus-buildings',
+      )) {
+        expect(layer['paint']['fill-extrusion-height'], lessThan(0.4));
+      }
       expect(layers.first['paint']['background-color'], CampusStyle.background);
       expect(sources['player']['data']['features'], isEmpty);
     },
   );
+
+  test(
+    'reference presentation starts within academic core and leaves room ahead',
+    () {
+      expect(geography.contains(CampusPresentation.academicCore), isTrue);
+      expect(CampusPresentation.explorationZoom, inInclusiveRange(16.5, 17.5));
+      expect(CampusPresentation.pitch, inInclusiveRange(50, 60));
+      expect(CampusPresentation.explorationTopPadding(700), greaterThan(100));
+      expect(CampusPresentation.explorationTopPadding(300), lessThan(100));
+    },
+  );
+
+  test('overview and GPS following retain the chosen exploration zoom', () {
+    final camera = CampusCameraSession()..initialize(390);
+    final initial = camera.explorationZoom;
+    expect(initial, inInclusiveRange(16, 17.5));
+    camera.rememberZoom(18.2);
+    camera.viewCampus();
+    camera.rememberZoom(14.1);
+    expect(camera.explorationZoom, 18.2);
+    camera.explore();
+    expect(camera.explorationZoom, 18.2);
+    camera.rememberZoom(17.8);
+    expect(camera.explorationZoom, 17.8);
+    camera.rememberZoom(double.nan);
+    expect(camera.explorationZoom, 17.8);
+    expect(
+      CampusPresentation.zoomForViewport(844),
+      greaterThan(CampusPresentation.zoomForViewport(390)),
+    );
+  });
+
+  test('rendered polygons use canonical winding for native roof meshes', () {
+    final style = CampusStyle.build(boundary, data);
+    final sources = style['sources'] as Map;
+    var polygons = 0;
+    for (final source in sources.values) {
+      for (final feature in source['data']['features']) {
+        final geometry = feature['geometry'];
+        if (geometry['type'] != 'Polygon') continue;
+        final rings = geometry['coordinates'] as List;
+        for (var r = 0; r < rings.length; r++) {
+          final ring = rings[r] as List;
+          var area = 0.0;
+          final x = ring.first[0] as num, y = ring.first[1] as num;
+          for (var i = 1; i < ring.length; i++) {
+            area +=
+                ((ring[i - 1][0] as num) - x) * ((ring[i][1] as num) - y) -
+                ((ring[i][0] as num) - x) * ((ring[i - 1][1] as num) - y);
+          }
+          expect(r == 0 ? area : -area, greaterThan(0));
+        }
+        polygons++;
+      }
+    }
+    expect(polygons, greaterThan(1000));
+  });
 }

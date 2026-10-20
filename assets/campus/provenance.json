@@ -1,6 +1,7 @@
 {
   "source": "https://api.openstreetmap.org/api/0.6/map?bbox=-98.188,26.297,-98.160,26.319",
-  "retrieved_utc": "2026-10-20T04:05:27.188040+00:00",
+  "retrieved_utc": "2026-10-20T03:53:48.125906+00:00",
+  "generated_utc": "2026-10-20T04:43:59.427217+00:00",
   "source_sha256": "899f05d0ac8261c836612778877f0672c23386f5ea6bef147270930a05164b7b",
   "counts": {
     "parking": 43,
@@ -8,7 +9,11 @@
     "building": 93,
     "path": 666,
     "road": 278,
+    "road-edge": 278,
+    "road-surface": 278,
     "water": 6,
+    "path-edge": 661,
+    "path-surface": 661,
     "green": 2
   },
   "height_basis": {

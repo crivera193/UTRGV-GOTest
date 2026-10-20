@@ -1,6 +1,6 @@
 {
-    "name": "campus_app",
-    "short_name": "campus_app",
+    "name": "UTRGV-GO",
+    "short_name": "UTRGV-GO",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

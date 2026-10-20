@@ -13,6 +13,8 @@ import '../games/spot_proximity.dart';
 import '../map/campus_geography.dart';
 import '../map/campus_location.dart';
 import '../map/campus_style.dart';
+import '../map/campus_presentation.dart';
+import '../map/campus_zoom_controls.dart';
 import '../player/cowboy_motion.dart';
 import '../player/cowboy_sprite.dart';
 import '../widgets/mapbox_configuration_notice.dart';
@@ -35,12 +37,15 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   bool _ready = false, _styleLoaded = false, _following = false;
   bool _requesting = false, _locationEnabled = false, _hasFitted = false;
   bool _configured = false, _fitting = false;
+  final _cameraSession = CampusCameraSession();
   double _minZoom = 12;
   Size? _size;
   int _locationGeneration = 0;
   final _cowboyMotion = CowboyMotion();
   Offset? _cowboyGround;
-  double _cameraBearing = 0, _cameraPitch = 45, _cameraZoom = 14;
+  double _cameraBearing = 0,
+      _cameraPitch = CampusPresentation.pitch,
+      _cameraZoom = 14;
   int _projectionGeneration = 0;
   bool _projectionBusy = false, _projectionQueued = false;
   bool _foreground = true;
@@ -71,15 +76,16 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         '${dir.path}/style.json',
       ).writeAsString(style, flush: true);
       if (!mounted) return;
+      _cameraSession.initialize(_size?.width ?? 390);
       setState(() {
         _geography = geography;
         _location = CampusLocationPolicy(geography);
         _styleJson = style;
         _styleUri = file.uri.toString();
         _initialViewport = CameraViewportState(
-          center: _point(geography.center),
-          zoom: 14,
-          pitch: 45,
+          center: _point(CampusPresentation.academicCore),
+          zoom: _cameraSession.explorationZoom,
+          pitch: CampusPresentation.pitch,
           bearing: 0,
         );
         _error = null;
@@ -103,8 +109,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         ),
         minZoom: _minZoom,
         maxZoom: 19.5,
-        minPitch: 45,
-        maxPitch: 45,
+        minPitch: CampusPresentation.pitch,
+        maxPitch: CampusPresentation.pitch,
       ),
     );
     await map.gestures.updateSettings(
@@ -120,6 +126,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     await map.location.updateSettings(
       LocationComponentSettings(enabled: false),
     );
+    await map.scaleBar.updateSettings(ScaleBarSettings(enabled: false));
     // Leave Mapbox logo, attribution and telemetry controls intact.
   }
 
@@ -130,6 +137,14 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       await _renderPlayer();
       if (!_hasFitted) {
         await _viewCampus();
+        _cameraSession.explore();
+        await _moveCamera(
+          CameraOptions(
+            center: _point(CampusPresentation.academicCore),
+            zoom: _cameraSession.explorationZoom,
+            padding: _explorationPadding,
+          ),
+        );
         _hasFitted = true;
       }
       if (mounted) {
@@ -152,11 +167,41 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     right: 24,
   );
 
+  MbxEdgeInsets get _explorationPadding => MbxEdgeInsets(
+    top: CampusPresentation.explorationTopPadding(_size?.height ?? 600),
+    left: 24,
+    right: 24,
+    bottom: (_size?.height ?? 600) < 400 ? 64 : 100,
+  );
+
+  Future<void> _zoomBy(double delta) async {
+    final map = _map;
+    if (map == null || !_ready || _fitting) return;
+    _manualCamera();
+    try {
+      final camera = await map.getCameraState();
+      _cameraSession.explore();
+      _cameraSession.rememberZoom((camera.zoom + delta).clamp(_minZoom, 19.5));
+      await _moveCamera(
+        CameraOptions(
+          center: camera.center,
+          zoom: camera.zoom + delta,
+          padding: camera.padding,
+        ),
+      );
+    } catch (_) {
+      if (mounted) {
+        setState(() => _error = 'Unable to change map zoom. Tap retry.');
+      }
+    }
+  }
+
   Future<void> _viewCampus() async {
     final map = _map, c = _geography;
     if (map == null || c == null || _fitting || _gameOpen) return;
     _fitting = true;
     _following = false;
+    _cameraSession.viewCampus();
     // Compute whole-campus fit for the actual viewport. Center and pitch bounds
     // stay enforced even while the minimum zoom is recalculated on resize.
     try {
@@ -172,13 +217,18 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       await map.setBounds(CameraBoundsOptions(minZoom: 12));
       final fit = await map.cameraForCoordinatesPadding(
         c.outerPoints.map(_point).toList(),
-        CameraOptions(pitch: 45, bearing: 0, padding: _padding),
+        CameraOptions(
+          pitch: CampusPresentation.pitch,
+          bearing: 0,
+          padding: _padding,
+        ),
         null,
         17,
         null,
       );
       _minZoom = (fit.zoom ?? 14).clamp(12, 19.5);
       await map.setBounds(CameraBoundsOptions(minZoom: _minZoom));
+      fit.padding = _padding;
       await _moveCamera(fit);
     } finally {
       _fitting = false;
@@ -207,9 +257,9 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       CameraOptions(
         center: _point(c.clampCameraCenter(center)),
         zoom: (camera.zoom ?? 17).clamp(_minZoom, 19.5),
-        pitch: 45,
+        pitch: CampusPresentation.pitch,
         bearing: 0,
-        padding: camera.padding ?? _padding,
+        padding: camera.padding ?? _explorationPadding,
       ),
     );
   }
@@ -218,8 +268,16 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     if (!_gameOpen && _following && mounted) setState(() => _following = false);
   }
 
+  void _cameraChanged(CameraChangedEventData event) {
+    if (_hasFitted && !_fitting) {
+      _cameraSession.rememberZoom(event.cameraState.zoom);
+    }
+    unawaited(_projectCowboy());
+  }
+
   Future<void> _followMe() async {
     if (!_ready || _requesting || _fitting) return;
+    _cameraSession.explore();
     if (_location?.marker != null && _locationEnabled) {
       setState(() => _following = true);
       await _followPosition();
@@ -469,7 +527,9 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   Future<void> _followPosition() async {
     final p = _location?.marker;
     if (p != null && _following) {
-      await _moveCamera(CameraOptions(center: _point(p), zoom: 17.5));
+      await _moveCamera(
+        CameraOptions(center: _point(p), zoom: _cameraSession.explorationZoom),
+      );
     }
   }
 
@@ -593,7 +653,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
           }
         }
         return ColoredBox(
-          color: const Color(0xffe8eee7),
+          color: const Color(0xffc9ddd3),
           child: Stack(
             children: [
               if (_styleUri != null)
@@ -620,8 +680,11 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                     unawaited(_finishStyle());
                   },
                   onScrollListener: (_) => _manualCamera(),
-                  onZoomListener: (_) => _manualCamera(),
-                  onCameraChangeListener: (_) => unawaited(_projectCowboy()),
+                  onZoomListener: (_) {
+                    _cameraSession.explore();
+                    _manualCamera();
+                  },
+                  onCameraChangeListener: _cameraChanged,
                   onMapLoadErrorListener: (event) {
                     // Glyph failure should not hide locally bundled geography.
                     if (event.type == MapLoadErrorType.GLYPHS) return;
@@ -635,7 +698,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
               if (!_ready || _error != null)
                 Positioned.fill(
                   child: ColoredBox(
-                    color: const Color(0xffe8eee7),
+                    color: const Color(0xffc9ddd3),
                     child: Center(
                       child: _error == null
                           ? const CircularProgressIndicator()
@@ -699,6 +762,14 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                   ),
                 ),
               if (_ready && _error == null) ...[
+                Positioned(
+                  left: 12,
+                  top: 96,
+                  child: CampusZoomControls(
+                    onZoomIn: () => unawaited(_zoomBy(1)),
+                    onZoomOut: () => unawaited(_zoomBy(-1)),
+                  ),
+                ),
                 if (_foreground &&
                     _location?.state == CampusGpsState.onCampus &&
                     _location?.marker != null &&

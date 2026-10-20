@@ -7,7 +7,9 @@ class MainScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
-      title: const Text('Campus exploration'),
+      toolbarHeight: 44,
+      backgroundColor: const Color(0xfff1f8eb),
+      title: const Text('UTRGV-GO', style: TextStyle(fontSize: 18)),
       actions: [
         IconButton(
           tooltip: 'Sign out',

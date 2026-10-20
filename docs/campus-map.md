@@ -45,7 +45,7 @@ Data gaps: OSM does not contain all newer northern athletics buildings/practice
 field details. Their grounds are included, but no invented rectangular building
 substitutes are drawn. Footprints/paths and building names may lag current campus
 construction. Library/Union have warm orange accents; selected useful building
-labels are shown from zoom 15. Detailed architectural models are outside this pass.
+labels are shown from zoom 16. Detailed architectural models are outside this pass.
 
 Regenerate with Python and Shapely: `python tool/build_campus_data.py`.
 An optional XML argument reuses a previously downloaded bounded OSM extract.
@@ -66,7 +66,7 @@ Mapbox font glyphs are the only map content fetched online; glyph errors may omi
 labels but leave local geography usable.
 
 The native camera center is constrained to the campus extent's bounding box;
-in empty corners only the calm background appears. Pitch is fixed at 45 degrees,
+in empty corners only the calm background appears. Pitch is fixed at 55 degrees,
 rotation disabled, maximum zoom 19.5. View campus fits all exterior boundary
 vertices with screen/UI padding using the installed SDK's camera fit API. The
 fit becomes the minimum zoom; it is recalculated on viewport size changes.
@@ -86,8 +86,8 @@ accuracy is hidden. Boundary classification uses uncertainty margins (at least
 never moved to a false campus coordinate. Near-edge uncertain fixes receive a
 clear message; outside positions stop following and remain hidden. A 3 m/accuracy
 deadband and interpolation between actual accepted points reduce jitter without
-predicted movement. The interim player is an orange dot/ring; there is no heading
-rotation while stationary. The cowboy/Flame pipeline is independent of this pass.
+predicted movement. The existing cowboy and Flame integration are retained. This
+presentation pass preserves their animation, smoothing and travel systems.
 
 ## Verification and review boundary
 
@@ -107,7 +107,7 @@ verified visual result or release. iOS compilation and real on-campus GPS remain
 unverified. Review overview coverage, tilted close-up, boundary/off-campus message
 and logo/attribution layout on native hardware before accepting the appearance.
 
-Checked map baseline: Flutter analysis reported no issues, all 14 map/foundation
+Original map baseline (4425a9d): Flutter analysis reported no issues, all 14 map/foundation
 tests passed, Mapbox's style validator accepted the exported runtime JSON, and
 the Android x86_64 debug build succeeded. Its packaged campus assets were compared
 byte-for-byte with source. The saved, uninstalled artifact is
@@ -116,3 +116,43 @@ byte-for-byte with source. The saved, uninstalled artifact is
 The full working-folder test run additionally encountered a failing, untracked
 cowboy sprite-loading test during concurrent player work. That separate work
 was preserved and is not part of the checked map baseline or artifact.
+
+
+## Reference presentation and UTRGV-GO titles
+
+The owner supplied two Pokemon GO reference images and the current app screenshot.
+A read-only native capture reproduced isolated buildings and extremely faint ground.
+The installed cached style contained the campus polygon, route features, opaque
+colors and no outside mask: the source data was present. SwiftShader/GFXSTREAM
+logged GL_INVALID_VALUE; this suggests a driver issue but does not prove the exact
+failed shader. No unsupported claim of a confirmed GPU root cause is made.
+
+The revised style uses shallow fill-extrusion meshes for ground, parking, sports,
+water and buffered route surfaces, alongside the existing building footprints.
+Ground offsets of 0.20-0.36 m are rendering offsets only. Buildings retain their
+original display heights above a 0.40 m base, with warm cream roofs/walls, white
+lighting and sparse orange accents. Polygon winding is canonicalized at load.
+
+Paths/roads keep OSM centerlines and connections. Cartographic widths are 3 m for
+paths, 4 m for pedestrian areas, 5.5 m for service roads and 9 m for other roads,
+with restrained edges. Buffered polygons are clipped again AFTER widening; nothing
+extends into the city. The asset adds 278 road surfaces/edges and 661 path surfaces/
+edges. Five mapped walking plazas also receive the path color. No routes, new
+buildings or land-use areas are invented. Data/height gaps above are unchanged.
+
+CampusPresentation targets approximately 220 m across the padded viewport at the
+focus, with an initial zoom between 16 and 17.5 (about 16.7 at 390 logical pixels).
+Pitch is 55 degrees. Exploration padding places the geographic player lower:
+top 35% of map height, bottom 100 logical pixels; short landscape uses 80/64.
+The non-follow initial view uses the actual academic core, not a false player.
+CampusCameraSession retains selected exploration zoom across ordinary GPS updates
+and Follow me. View campus deliberately fits the full extent without overwriting
+that zoom. Pinch and explicit + / - controls remain bounded. The compact map header,
+app-bar product titles and native/web/window display names use UTRGV-GO. Package,
+auth/session and bundle identifiers are retained. Existing cowboy/Flame behavior
+and concurrent source edits are preserved.
+
+The new source is NOT installed or deployed under the owner's explicit limit.
+The baseline capture diagnoses the old result; it is not a revised-style capture.
+New player-follow, closer zoom and overview native captures remain unavailable
+until manual installation/review is authorized. A build is not visual acceptance.
