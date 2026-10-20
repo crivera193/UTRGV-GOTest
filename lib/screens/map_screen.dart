@@ -9,6 +9,8 @@ import 'package:geolocator/geolocator.dart' as gps;
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' hide Size;
 import 'package:permission_handler/permission_handler.dart';
 import '../games/game_host.dart';
+import '../games/chapel_capture.dart';
+import '../games/chapel_card.dart';
 import '../games/game_spot.dart';
 import '../games/spot_proximity.dart';
 import '../map/campus_geography.dart';
@@ -57,12 +59,36 @@ class _MapScreenState extends State<MapScreen>
   CampusPoint? _lastFollowCenter;
   bool _foreground = true;
   final _proximity = SpotProximity(configuredGameSpots);
-  bool _gameOpen = false;
+  bool _gameOpen = false, _chapelCardOpen = false;
+  final _chapel = ChapelPoint(LocalPointPersistence());
+  final _chapelPlacement = ValueNotifier<Offset?>(null);
+  late final LatestProjection<Offset> _chapelProjector;
+  String? _chapelLoadError;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _chapelProjector = LatestProjection<Offset>(
+      read: () async {
+        if (_map == null || !_styleLoaded || !_foreground) return null;
+        final pixel = await _map!.pixelForCoordinate(
+          _point(ChapelConfig.point),
+        );
+        if (!pixel.x.isFinite || !pixel.y.isFinite) return null;
+        return Offset(pixel.x, pixel.y);
+      },
+      apply: (value) {
+        if (mounted) _chapelPlacement.value = value;
+      },
+    );
+    unawaited(
+      _chapel.load().catchError((Object _) {
+        if (mounted) {
+          setState(() => _chapelLoadError = 'Local point storage unavailable.');
+        }
+      }),
+    );
     _projector = LatestProjection<CowboyPlacement>(
       read: _readCowboyProjection,
       apply: (placement) {
@@ -149,6 +175,7 @@ class _MapScreenState extends State<MapScreen>
     try {
       if (!mounted) return;
       await _renderPlayer();
+      await _chapelProjector.request(invalidate: true);
       if (!_hasFitted) {
         await _viewCampus();
         _cameraSession.explore();
@@ -285,6 +312,7 @@ class _MapScreenState extends State<MapScreen>
 
   void _cameraChanged(CameraChangedEventData event) {
     _cameraState = event.cameraState;
+    unawaited(_chapelProjector.request(invalidate: true));
     if (_hasFitted && !_fitting) {
       _cameraSession.rememberZoom(event.cameraState.zoom);
     }
@@ -670,7 +698,76 @@ class _MapScreenState extends State<MapScreen>
     }
   }
 
+  String? _chapelAttackReason() {
+    if (_chapel.busy) return 'Saving local point state…';
+    if (!_foreground || !_chapel.loaded) {
+      return _chapelLoadError ?? 'Loading local point state…';
+    }
+    if (_location?.state != CampusGpsState.onCampus) {
+      return 'Enable GPS and move safely onto campus.';
+    }
+    return _proximity.attackReason(chapelSpot, DateTime.now());
+  }
+
+  Future<void> _showChapel() async {
+    if (_chapelCardOpen || _gameOpen) return;
+    _chapelCardOpen = true;
+    try {
+      await showDialog<void>(
+        context: context,
+        builder: (_) => ChapelCard(
+          point: _chapel,
+          reason: _chapelAttackReason,
+          distance: () => _proximity.distanceTo(chapelSpot),
+          onAttack: _attackChapel,
+        ),
+      );
+    } finally {
+      _chapelCardOpen = false;
+    }
+  }
+
+  Future<void> _attackChapel() async {
+    if (_gameOpen ||
+        _chapelAttackReason() != null ||
+        _chapel.state.owner == ChapelConfig.playerTeam) {
+      return;
+    }
+    if (!_proximity.launchAttack(chapelSpot, DateTime.now())) return;
+    final wasFollowing = _following;
+    final attack = CaptureSession(_chapel);
+    setState(() => _gameOpen = true);
+    try {
+      await Navigator.of(context).push<GameExit>(
+        MaterialPageRoute(
+          builder: (_) => GameHost(
+            gameId: 'chapel-football',
+            session: GameSessionContext(
+              spotId: ChapelConfig.id,
+              startedAt: DateTime.now(),
+              capture: attack,
+            ),
+          ),
+        ),
+      );
+    } finally {
+      attack.close();
+      _proximity.close(DateTime.now());
+      if (mounted) {
+        setState(() {
+          _gameOpen = false;
+          _following = wasFollowing;
+        });
+        unawaited(_renderPlayer());
+      }
+    }
+  }
+
   Future<void> _openGame({bool debug = false}) async {
+    if (!debug && _proximity.selected?.id == ChapelConfig.id) {
+      await _showChapel();
+      return;
+    }
     if (_gameOpen ||
         !_foreground ||
         !(ModalRoute.of(context)?.isCurrent ?? true)) {
@@ -722,6 +819,8 @@ class _MapScreenState extends State<MapScreen>
     _travelTicker.dispose();
     _projector.dispose();
     _cowboyPlacement.dispose();
+    _chapelProjector.dispose();
+    _chapelPlacement.dispose();
     super.dispose();
   }
 
@@ -849,6 +948,31 @@ class _MapScreenState extends State<MapScreen>
                     ),
                   ),
                 ),
+              if (_ready)
+                ValueListenableBuilder<Offset?>(
+                  valueListenable: _chapelPlacement,
+                  builder: (context, position, _) {
+                    if (position == null ||
+                        position.dx < 0 ||
+                        position.dy < 0 ||
+                        position.dx > (_size?.width ?? 0) ||
+                        position.dy > (_size?.height ?? 0)) {
+                      return const SizedBox.shrink();
+                    }
+                    return Positioned(
+                      left: position.dx - 38,
+                      top: position.dy - 88,
+                      width: 76,
+                      child: ListenableBuilder(
+                        listenable: _chapel,
+                        builder: (context, _) => ChapelBeacon(
+                          owner: _chapel.state.owner,
+                          onTap: _showChapel,
+                        ),
+                      ),
+                    );
+                  },
+                ),
               CowboySprite(
                 key: const ValueKey('persistent-campus-cowboy'),
                 motion: _cowboyMotion,
@@ -890,6 +1014,11 @@ class _MapScreenState extends State<MapScreen>
                     spacing: 10,
                     runSpacing: 4,
                     children: [
+                      FilledButton.tonalIcon(
+                        onPressed: _showChapel,
+                        icon: const Icon(Icons.flag_outlined),
+                        label: const Text('Chapel Point'),
+                      ),
                       FilledButton.tonalIcon(
                         onPressed: () => unawaited(_showOverview()),
                         icon: const Icon(Icons.school_outlined),

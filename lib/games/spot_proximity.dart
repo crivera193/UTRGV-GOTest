@@ -49,6 +49,20 @@ class SpotProximity {
     s.point.longitude,
   );
 
+  double? distanceTo(GameSpot spot) => _fix == null ? null : _distance(spot);
+
+  String? attackReason(GameSpot spot, DateTime now) {
+    if (!_usable(now)) {
+      return 'A fresh GPS fix with accuracy of 15 m or better is required.';
+    }
+    if (!_onCampus) return 'A confirmed on-campus GPS fix is required.';
+    if (_distance(spot) + _fix!.accuracy >
+        (spot.attackMeters ?? spot.entryMeters)) {
+      return 'Move within 130 ft (39.624 m), including GPS uncertainty. Stay on a safe outdoor path.';
+    }
+    return null;
+  }
+
   void accept(CampusFix fix, {required bool onCampus, required DateTime now}) {
     // Replayed/out-of-order fixes cannot provide dwell evidence.
     if (_lastTimestamp != null && !fix.timestamp.isAfter(_lastTimestamp!)) {
@@ -161,10 +175,23 @@ class SpotProximity {
     if (active) return null;
     _evaluate(now); // Play must recheck age, accuracy, campus and distance.
     if (state != SpotState.eligible) return null;
+    if (selected!.attackMeters != null &&
+        attackReason(selected!, now) != null) {
+      return null;
+    }
     _suppressArrival();
     _activeSpotId = selected!.id;
     state = SpotState.active;
     return selected;
+  }
+
+  bool launchAttack(GameSpot spot, DateTime now) {
+    if (active || attackReason(spot, now) != null) return false;
+    _suppressArrival();
+    selected = spot;
+    _activeSpotId = spot.id;
+    state = SpotState.active;
+    return true;
   }
 
   void close(DateTime now) {

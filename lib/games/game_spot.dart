@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import '../map/campus_geography.dart';
+import 'chapel_capture.dart';
 
 abstract final class ProximitySettings {
   static const entryMeters = 25.0;
@@ -16,6 +17,7 @@ class GameSpot {
     required this.point,
     this.gameId = 'preview',
     this.enabled = true,
+    this.attackMeters,
     this.entryMeters = ProximitySettings.entryMeters,
     this.exitMeters = ProximitySettings.exitMeters,
   }) : assert(entryMeters > 0 && exitMeters > entryMeters);
@@ -24,10 +26,21 @@ class GameSpot {
   final CampusPoint point;
   final bool enabled;
   final double entryMeters, exitMeters;
+  final double? attackMeters;
 }
 
-// No pedestrian launch point has been verified for production yet.
-const productionGameSpots = <GameSpot>[];
+// Official Concept3D map 1165, location 295835. Play outdoors within radius;
+// the separately mapped chapel lawn is ~20 m north of this landmark.
+const chapelSpot = GameSpot(
+  id: ChapelConfig.id,
+  name: ChapelConfig.name,
+  point: ChapelConfig.point,
+  gameId: 'chapel-football',
+  entryMeters: ChapelConfig.attackMeters,
+  exitMeters: 45,
+  attackMeters: ChapelConfig.attackMeters,
+);
+const productionGameSpots = <GameSpot>[chapelSpot];
 const debugGameSpotsEnabled =
     kDebugMode && bool.fromEnvironment('GAME_SPOTS_DEMO');
 // Reuses the legacy fountain record, NOT a verified safe outdoor destination.
@@ -35,7 +48,7 @@ const debugGameSpotsEnabled =
 const debugDemoSpot = GameSpot(
   id: 'debug-fountain-preview',
   name: 'DEBUG ONLY · fountain demonstration (unverified)',
-  point: CampusPoint(-98.176061, 26.304802),
+  point: ChapelConfig.debugPoint,
 );
 
 List<GameSpot> get configuredGameSpots => [

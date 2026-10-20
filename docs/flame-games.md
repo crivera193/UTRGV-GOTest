@@ -1,4 +1,138 @@
-# Mini-game foundation
+# Chapel capture prototype — October 20, 2026
+
+This section supersedes the historical preview-only foundation below. The chapel
+now hosts a local Flame football quiz. No multiplayer, shared tables, rewards,
+new accounts or background GPS were added.
+
+## Entry and settings
+
+Tap the ring/diamond/pedestal beacon or **Chapel Point** in the map controls.
+The card opens at any distance. It includes a labeled placeholder illustration
+and description, owner/player teams, local ownership notice, HP and distance.
+Friendly ownership disables Attack. **DEBUG · Reset local owner and HP** restores
+Team B / 100 HP. No state is written to Supabase.
+
+For isolated review without an account, Mapbox or travel, use a debug build with
+`--dart-define=CHAPEL_PREVIEW=true`, then **Open chapel · no GPS eligibility**.
+This entry is guarded by `kDebugMode` and uses separate persistent local state
+`utrgv_go_chapel_debug_v1`; normal map state uses `utrgv_go_chapel_local_v1`.
+Existing GAME_PREVIEW/GAME_SPOTS_DEMO entries remain. The fountain demonstration
+coordinate remains explicitly debug-only, never a substitute for the chapel.
+
+`ChapelConfig` in `lib/games/chapel_capture.dart` centralizes text, coordinates,
+placeholder teams, 100 maximum HP, 25 damage, three shots and demo questions.
+Questions have stable IDs and stable a–d answer IDs. Topics are Edinburg, the
+meaning of RGV, ECHAP and pedestrian safety; distractors are not factual claims.
+`LocalPointPersistence` owns save format/key/validation. `CaptureSession` owns
+the provisional policy of retaining earned damage after failure or Close.
+Capture restores maximum HP under the new owner (`restoreHpOnCapture`).
+
+## Coordinate evidence
+
+Verified October 20 from the [official interactive map](https://www.utrgv.edu/maps/edinburg/index.htm),
+which embeds [Concept3D map 1165](https://map.concept3d.com/?id=1165#!m/295835).
+The public map search for chapel returned:
+
+| Record | ID | Latitude | Longitude |
+| --- | --- | --- | --- |
+| Chapel (ECHAP), beacon anchor | 295835 | 26.305357 | -98.174683 |
+| Chapel Lawn, outdoor context | 922984 | 26.305534 | -98.174644 |
+
+The [building inventory](https://www.utrgv.edu/campus-operations/departments/campus-facilities-operations/building/index.htm)
+identifies ECHAP as Chapel. The [official 2025 PDF](https://www.utrgv.edu/ucentral/_files/documents/campus-maps/utrgv-edinburg-map.pdf)
+also identifies it (number 7 in that version; older maps number it 16).
+The [official Earth Fest listing](https://calendar.utrgv.edu/event/earth-fest-2026-edinburg)
+confirms chapel-lawn use, but its embedded geographic metadata points to Arizona;
+those coordinates were rejected. No map photo was copied. The placeholder card,
+beacon and stadium use original local shapes and existing Inter/OFL typography.
+
+The mapped lawn is about 20 m north of the chapel anchor, inside the attack
+radius. Play from a safe outdoor path or lawn; never enter the building to play.
+Actual pedestrian access and GPS quality need outdoor human review; the official
+landmark marker is not a surveyed pedestrian waypoint.
+
+## GPS, map and game contract
+
+The chapel's single approved radius is **130 ft = 39.624 m** in ChapelConfig.
+Its invitation entry radius references that constant. The 45 m invitation exit
+hysteresis never unlocks Attack; old 25/40 m defaults apply only to the legacy
+preview demo. Card and press-time checks reuse SpotProximity's raw foreground
+fix: confirmed on-campus, at most 10 s old, not future, accuracy at most 15 m,
+and **distance + reported accuracy <= 39.624 m**. This is conservative about
+uncertainty. Camera/avatar smoothing never supplies eligibility. An active
+session survives GPS jitter. Backgrounding pauses play and cancels aim.
+
+The beacon uses Mapbox pixelForCoordinate in logical pixels and a constant-size
+Flutter control. LatestProjection discards obsolete camera replies. Camera
+changes/style readiness reproject it; off-screen beacons are hidden. Existing
+navigation bounds are unchanged. One opaque game route retains the map, blocks
+map input, and returns through the same card with updated owner/HP and follow
+state. Closing suppresses repeated proximity invitations.
+
+FootballShot separates world lateral x, forward z and height h from projection.
+All four separated goals share z=30. Direction sets lateral/forward velocity;
+upward swipe displacement controls bounded power. Input uses a 400×650 logical
+field and a generous ball start area. Tiny/backward, cancelled and secondary
+pointer gestures cannot fire. There is no answer-dependent aim correction.
+Flight uses analytic ballistic motion, perspective scale, spin and a turf shadow.
+Scoring solves the forward-plane crossing even across a long frame and requires
+ball-radius clearance between uprights, above crossbar and below post tops.
+Answer panels are not hitboxes. Each shot ID resolves once.
+
+States are question-ready, aiming, flying, resolving and session-ended. A miss
+uses a shot and retains question/positions; three misses end the session. A wrong
+goal ends it immediately. A correct goal saves one damage event before Continue
+advances and resets shots. Four default correct goals capture Team A and restore
+100 HP. Save failure awards no in-memory damage and ends visibly. Callbacks after
+Close cannot apply a new result; an already earned pending save may finish
+without advancing the closed session. The existing host owns pause, route
+visibility, one instance per session and cache cleanup.
+
+## Verification and review limits
+
+Flutter analysis passed; all **50** tests passed. Targeted tests cover radius,
+uncertainty/stale/campus rejection, invitation hysteresis, four reachable goals,
+aperture/trajectory bounds, correct/wrong/miss rules, three misses, shot reset,
+exactly-once damage, capture, local persistence/reset, late callbacks, actual
+Flame cancel-to-end delegation, secondary pointers, pause and close/reopen.
+A real GameWidget test drives a five-second crossing frame and checks that
+another update cannot award the same hit again.
+
+Android x86_64 debug APK built with the configured project toolchain. Native
+SharedPreferences registration was confirmed. The existing Mapbox Kotlin plugin
+migration warning remains. This working-tree build includes the preserved
+pre-existing map/cowboy changes. Source/build hashes are under ignored
+`output/chapel-review/`.
+
+Actual Flutter test renders at **390×844, DPR 1** are under that same directory:
+four-goal-widget.png, chapel-card-widget.png and capture-result-widget.png.
+beacon-only-widget.png shows the original beacon by itself, without a map.
+These render the real implementation with bundled fonts; they are **not native
+emulator screenshots**. Native map-marker captures/projection checks, outdoor GPS,
+normal-speed manual swipe feel and owner visual approval remain pending.
+No device installation, PC input automation, touch campaign, video or deployment
+was performed, as explicitly required for this task.
+
+References read: [GameWidget](https://docs.flame-engine.org/latest/flame/game_widget.html),
+[drag events](https://docs.flame-engine.org/latest/flame/inputs/drag_events.html),
+[collision detection](https://docs.flame-engine.org/latest/flame/collision_detection.html),
+[FlameGame](https://docs.flame-engine.org/latest/flame/game.html).
+These guides identify themselves as older documentation; callbacks/lifecycle
+were checked against installed Flame **1.38.2**, including cancellation semantics.
+
+Changed files: `lib/games/chapel_capture.dart`, `chapel_card.dart`,
+`chapel_football_game.dart`, `football_shot.dart`, `game_host.dart`,
+`game_spot.dart`, `spot_proximity.dart`; `lib/screens/map_screen.dart`;
+`lib/main.dart`; `pubspec.yaml`/`pubspec.lock`; `test/chapel_capture_test.dart`,
+`test/spot_proximity_test.dart`; this guide and `README.md`.
+Pre-existing edits to AGENTS, campus-map/cowboy guides, camera presentation,
+cowboy motion and related tests remain uncommitted. Only chapel-specific map
+hunks are included in this delivery; the working tree retains the existing
+camera/GPS changes in that same file.
+
+---
+
+## Historical mini-game foundation — October 19
 
 Implemented October 19, 2026 using Flutter 3.47.7 / Dart 3.13.5,
 Flame **1.38.2** (stable, pinned) and existing geolocator 14.1.1.

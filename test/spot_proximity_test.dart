@@ -169,6 +169,7 @@ void main() {
     expect(p.state, SpotState.outsideRange);
     fix(p, 3);
     expect(p.selected, a);
-    expect(productionGameSpots, isEmpty);
+    expect(productionGameSpots, [chapelSpot]);
+    expect(chapelSpot.attackMeters, 39.624);
   });
 }

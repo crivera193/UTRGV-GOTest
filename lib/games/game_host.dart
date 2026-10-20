@@ -1,4 +1,6 @@
 import 'dart:math' as math;
+import 'chapel_capture.dart';
+import 'chapel_football_game.dart';
 import 'package:flame/cache.dart';
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
@@ -12,10 +14,12 @@ class GameSessionContext {
     required this.spotId,
     required this.startedAt,
     this.debug = false,
+    this.capture,
   });
   final String spotId;
   final DateTime startedAt;
   final bool debug;
+  final CaptureSession? capture;
 }
 
 typedef SessionFactory =
@@ -79,6 +83,7 @@ class PreviewGame extends SessionGame {
 
 final Map<String, SessionFactory> gameRegistry = Map.unmodifiable({
   'preview': PreviewGame.new,
+  'chapel-football': ChapelFootballGame.new,
 });
 
 /// Reached only through main's kDebugMode guard; uses no account or GPS bypass
@@ -215,6 +220,7 @@ class _GameHostState extends State<GameHost>
   void _exit(GameExit result) {
     if (_closing || !mounted) return;
     _closing = true;
+    widget.session.capture?.close();
     _sync();
     Navigator.of(context).pop(result);
   }
@@ -239,6 +245,7 @@ class _GameHostState extends State<GameHost>
   );
   @override
   void dispose() {
+    widget.session.capture?.close();
     gameRouteObserver.unsubscribe(this);
     WidgetsBinding.instance.removeObserver(this);
     _game?.setVisible(false);
@@ -261,13 +268,55 @@ class _GameHostState extends State<GameHost>
     body: SafeArea(
       child: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Text(
-              '${widget.session.debug ? "DEBUG ONLY · no GPS eligibility\n" : ""}Game preview — gameplay coming next.',
-              textAlign: TextAlign.center,
+          if (widget.session.capture == null)
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Text('Game preview — gameplay coming next.'),
+            )
+          else
+            ListenableBuilder(
+              listenable: widget.session.capture!,
+              builder: (context, _) {
+                final attack = widget.session.capture!;
+                return Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  child: Column(
+                    children: [
+                      if (widget.session.debug)
+                        const Text('DEBUG ONLY · no GPS eligibility'),
+                      Text(
+                        'Chapel Point · ${attack.point.state.hp}/${ChapelConfig.maxHp} HP · ${attack.shots} shots',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      Text(
+                        attack.question.prompt,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontSize: 18),
+                      ),
+                      Text(attack.message, textAlign: TextAlign.center),
+                      if (attack.busy) const LinearProgressIndicator(),
+                      if (attack.phase == AttackPhase.resolving && !attack.busy)
+                        FilledButton(
+                          onPressed: attack.continuePlay,
+                          child: const Text('Continue'),
+                        ),
+                      if (attack.phase == AttackPhase.sessionEnded)
+                        FilledButton(
+                          onPressed: () => _exit(GameExit.previewClosed),
+                          child: Text(
+                            attack.captured
+                                ? 'Capture complete · Return to map'
+                                : 'Return to map',
+                          ),
+                        ),
+                    ],
+                  ),
+                );
+              },
             ),
-          ),
           Expanded(
             child: ClipRect(
               child: _creationError != null

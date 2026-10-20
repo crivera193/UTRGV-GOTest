@@ -8,7 +8,7 @@ The former social-events product has been removed in place. The app is named UTR
 - Clean account screens and a custom campus-only Mapbox map with opt-in GPS.
 - No events, factions, friends, event moderation, social notifications, Bon/Sparky branding or demo XP.
 - The existing cowboy sprite atlases are registered and connected to the filtered campus GPS position. The cowboy appears only with a valid on-campus fix and hides off campus, on stale/unavailable GPS and while the app is inactive. Location remains opt-in through Follow me.
-- The cowboy uses a rendered sprite overlay with GPS-driven walking/standing; The Flame mini-game host is integrated separately; actual gameplay and live animated 3D rendering are not implemented. Native map alignment and real campus walking remain to be reviewed on-device. See [cowboy source, runtime assets and rendering limits](docs/cowboy-player.md).
+- The cowboy uses a rendered sprite overlay with GPS-driven walking/standing. The separate Flame host now includes the local chapel football-quiz capture prototype. Live animated 3D rendering is not implemented. Native map alignment and real campus walking remain to be reviewed on-device. See [cowboy source, runtime assets and rendering limits](docs/cowboy-player.md) and [chapel capture, debug entry/reset and review limits](docs/flame-games.md).
 
 ## New Supabase project only
 

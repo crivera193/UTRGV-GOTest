@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'games/game_host.dart';
+import 'games/chapel_card.dart';
 import 'auth/auth_gate.dart';
 import 'config/app_configuration.dart';
 import 'widgets/mapbox_configuration_notice.dart';
@@ -42,7 +43,9 @@ class CampusApp extends StatelessWidget {
       useMaterial3: true,
       colorSchemeSeed: const Color(0xFF795548),
     ),
-    home: kDebugMode && const bool.fromEnvironment('GAME_PREVIEW')
+    home: kDebugMode && const bool.fromEnvironment('CHAPEL_PREVIEW')
+        ? const ChapelDebugLauncher()
+        : kDebugMode && const bool.fromEnvironment('GAME_PREVIEW')
         ? const DebugPreviewLauncher()
         : !AppConfiguration.hasBackend
         ? const Scaffold(
