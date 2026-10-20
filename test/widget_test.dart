@@ -62,6 +62,7 @@ void main() {
   });
   testWidgets('signup rejects non-edu before any service call', (tester) async {
     await tester.pumpWidget(const MaterialApp(home: LoginScreen()));
+    await tester.ensureVisible(find.text('Create an account'));
     await tester.tap(find.text('Create an account'));
     await tester.pump();
     await tester.enterText(
@@ -69,6 +70,7 @@ void main() {
       'person@gmail.com',
     );
     await tester.enterText(find.byType(TextFormField).last, 'longpassword');
+    await tester.ensureVisible(find.text('Create account'));
     await tester.tap(find.text('Create account'));
     await tester.pump();
     expect(

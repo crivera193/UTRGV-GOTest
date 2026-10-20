@@ -65,6 +65,14 @@ flutter:
   assets:
     - assets/campus/
     - assets/player/cowboy/
+    - assets/auth/
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Variable.ttf
+    - family: DMSerifDisplay
+      fonts:
+        - asset: assets/fonts/DMSerifDisplay-Regular.ttf
 
   # To add assets to your application, add an assets section, like this:
   # Cowboy runtime assets will be registered after mobile export verification.
