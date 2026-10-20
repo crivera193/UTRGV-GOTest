@@ -1,15 +1,14 @@
 import 'dart:math' as math;
 
-/// Only real GPS fixes (or explicitly labelled test fixtures) enter this policy.
-/// Camera changes never enter it. Coordinates remain owned by the campus policy.
+/// GPS evidence only. Cosmetic interpolation and camera motion never enter here.
 class CowboyMotion {
-  double heading = 0;
-  double playbackRate = 1;
+  double heading = 0, playbackRate = 1, speed = 0;
+  double cadenceSeconds = 1;
   bool walking = false;
-  _MotionFix? _anchor;
-  DateTime? _lastFix;
+  _MotionFix? _anchor, _previous;
   DateTime? _lastMovement;
   int _credibleSegments = 0;
+  double _stationarySeconds = 0, _threshold = 1.8;
 
   void accept({
     required double longitude,
@@ -18,23 +17,37 @@ class CowboyMotion {
     required DateTime timestamp,
     required DateTime now,
     required bool onCampus,
+    double? measuredSpeed,
+    double? speedAccuracy,
   }) {
-    if (_lastFix != null && !timestamp.isAfter(_lastFix!)) return;
+    if (_previous != null && !timestamp.isAfter(_previous!.time)) return;
     if (!onCampus ||
         !accuracy.isFinite ||
         accuracy < 0 ||
-        accuracy > 20 ||
+        accuracy > 40 ||
         !latitude.isFinite ||
         !longitude.isFinite ||
         latitude.abs() > 90 ||
         longitude.abs() > 180 ||
-        now.difference(timestamp).inSeconds > 5 ||
+        now.difference(timestamp).inMilliseconds > 6000 ||
         timestamp.isAfter(now.add(const Duration(seconds: 2)))) {
       stop();
       return;
     }
-    _lastFix = timestamp;
     final fix = _MotionFix(longitude, latitude, accuracy, timestamp);
+    final previous = _previous;
+    if (previous != null) {
+      final interval =
+          timestamp.difference(previous.time).inMilliseconds / 1000;
+      if (interval > 8) {
+        stop();
+      } else {
+        cadenceSeconds = (cadenceSeconds * 0.5 + interval * 0.5).clamp(0.5, 6);
+        final step = _distance(previous, fix);
+        _stationarySeconds = step < 0.5 ? _stationarySeconds + interval : 0;
+      }
+    }
+    _previous = fix;
     final anchor = _anchor;
     _anchor ??= fix;
     if (anchor == null) return;
@@ -43,51 +56,100 @@ class CowboyMotion {
         (longitude - anchor.lon) * 111320 * math.cos(latitude * math.pi / 180);
     final north = (latitude - anchor.lat) * 111320;
     final distance = math.sqrt(east * east + north * north);
-    final threshold = math.max(1.8, math.max(accuracy, anchor.accuracy) * 0.5);
-    if (seconds <= 0) return;
-    if (seconds > 12) {
+    final hasSpeed =
+        measuredSpeed != null &&
+        measuredSpeed.isFinite &&
+        measuredSpeed >= 0 &&
+        speedAccuracy != null &&
+        speedAccuracy.isFinite &&
+        speedAccuracy >= 0 &&
+        speedAccuracy <= 0.8;
+    _threshold = math.max(
+      1.8,
+      math.min(3.5, math.max(accuracy, anchor.accuracy) * 0.15),
+    );
+    if (_stationarySeconds >= math.max(1.8, cadenceSeconds * 1.5) ||
+        (hasSpeed &&
+            measuredSpeed < 0.25 &&
+            _stationarySeconds >= cadenceSeconds)) {
+      _idle();
       _anchor = fix;
-      walking = false;
-      _credibleSegments = 0;
       return;
     }
-    if (distance < threshold) {
+    if (seconds <= 0) return;
+    if (seconds > 16) {
+      _anchor = fix;
+      _idle();
+      return;
+    }
+    if (distance < _threshold) {
       expire(now);
       return;
     }
     _anchor = fix;
-    final speed = distance / seconds;
-    if (speed < 0.45 || speed > 3.5 || seconds < 0.5) {
-      walking = false;
-      _credibleSegments = 0;
+    final derivedSpeed = distance / seconds;
+    final travelSpeed = hasSpeed ? measuredSpeed : derivedSpeed;
+    if (derivedSpeed > 3.5 ||
+        travelSpeed < 0.45 ||
+        travelSpeed > 3.5 ||
+        seconds < 0.5) {
+      _idle();
       return;
     }
-    // Two coherent segments reject an isolated jump. A reversal resets evidence.
     final nextHeading = (math.atan2(east, north) * 180 / math.pi + 360) % 360;
     final delta = ((nextHeading - heading + 540) % 360) - 180;
-    if (_credibleSegments > 0 && delta.abs() > 100) _credibleSegments = 0;
+    if (!walking && _credibleSegments > 0 && delta.abs() > 100) {
+      _credibleSegments = 0;
+    }
     heading = nextHeading;
     _credibleSegments++;
-    walking = _credibleSegments >= 2;
+    walking = _credibleSegments >= 2 || (hasSpeed && measuredSpeed >= 0.5);
     _lastMovement = timestamp;
-    // Measured matched-travel speed recorded by the approved Blender rig.
-    playbackRate = (speed / 1.0645109415).clamp(0.65, 1.6);
+    speed = travelSpeed;
+    playbackRate = (speed / 1.0645109415).clamp(0.8, 1.35);
   }
 
   void expire(DateTime now) {
-    if (_lastMovement == null ||
-        now.difference(_lastMovement!).inMilliseconds > 4500) {
-      walking = false;
-      _credibleSegments = 0;
+    if (_previous == null) return;
+    // Evidence accumulation is not expired by the shorter walking hold timer.
+    // Otherwise a 4-6s threshold crossing can never form two segments.
+    final missingLimit = (cadenceSeconds * 2.2).clamp(3.0, 8.0);
+    if (now.difference(_previous!.time).inMilliseconds / 1000 > missingLimit) {
+      _idle();
+      _anchor = null;
+      return;
+    }
+    final movementHold =
+        (_threshold / math.max(speed, 0.6) + cadenceSeconds * 1.5).clamp(
+          3.2,
+          7.0,
+        );
+    if (walking &&
+        _lastMovement != null &&
+        now.difference(_lastMovement!).inMilliseconds / 1000 > movementHold) {
+      _idle();
     }
   }
 
-  void stop() {
+  void _idle() {
     walking = false;
-    _anchor = null;
-    _lastFix = null;
-    _lastMovement = null;
     _credibleSegments = 0;
+    _lastMovement = null;
+    speed = 0;
+  }
+
+  void stop() {
+    _idle();
+    _anchor = null;
+    _previous = null;
+    _stationarySeconds = 0;
+    cadenceSeconds = 1;
+  }
+
+  static double _distance(_MotionFix a, _MotionFix b) {
+    final x = (a.lon - b.lon) * 111320 * math.cos(a.lat * math.pi / 180),
+        y = (a.lat - b.lat) * 111320;
+    return math.sqrt(x * x + y * y);
   }
 }
 

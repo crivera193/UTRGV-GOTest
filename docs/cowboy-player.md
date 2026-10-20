@@ -42,60 +42,110 @@ The installed SDK documents `pixelForCoordinate` in logical pixels, matching
 
 This is a cartographic sprite overlay, not a live skeletal 3D model: heading
 quantization is 45 degrees and pitch uses the nearest of 0/30/50 degrees. The
-current campus map locks its camera to 45 degrees/north-up; the corresponding
+current campus map locks its camera to 55 degrees/north-up; the corresponding
 50-degree view is a five-degree approximation. The marker deliberately draws
 above buildings and does not cast map shadows or participate in building depth.
 It can remain visible through a building footprint. Perspective, map lighting and
 sub-pixel ground contact are approximations; owner appearance review is required.
 Three decoded atlases use about 38 MB RGBA memory, excluding Flutter overhead.
 
-## GPS behavior
+## Walking and movement repair
 
-`MapScreen` now mounts the existing sprite only for an accepted on-campus GPS
-marker. It reprojects the marker after GPS/camera updates and hides the overlay
-when the point leaves the viewport or GPS becomes outside, uncertain, stale or
-unavailable. App inactivity removes the overlay and stops GPS/motion evidence;
-resume waits for fresh fixes. The orange ground ring remains; the old solid dot
-is hidden. Cowboy assets are included in the Flutter bundle. These integration
-changes have not yet been visually verified over the native map on a device.
+The repair preserves the approved master and runtime atlases byte-for-byte.
+Independent inspection confirmed twelve distinct poses, correct 160×192 crops,
+a 1.333-second loop and common foot anchors per pitch. No new export was needed.
 
-The existing campus policy owns permission/service state, boundary uncertainty,
-real position smoothing, and hiding stale/outside locations. No replacement
-on-campus coordinate is generated. Motion requires accuracy within 20 meters,
-two directionally coherent segments above max(1.8 m, half the reported accuracy),
-and derived speed of 0.45–3.5 m/s. Opposite jumps, teleports, duplicate timestamps,
-future and stale fixes do not start walking. A 4.5-second movement timeout, checked
-once per second, returns to standing. Playback uses the source rig's recorded 1.06451 m/s travel speed,
-clamped to 0.65–1.6 times. Delayed walking is deliberate when GPS cannot resolve
-short steps. Movement is never inferred from camera events or extrapolated beyond
-received fixes. Manual map browsing suspends follow; Follow me resumes it.
+### Causes found
 
-## Focused verification
+- The old gate needed two segments above half the reported GPS accuracy, but a
+  4.5-second timeout erased evidence between segments. At synthetic 1-second
+  updates, 1.2 m/s and 12–20 m accuracy, walking never started (0/25 samples).
+  Earlier passing tests used 3 m accuracy and missed that case.
+- The displayed marker combined a 3–5 m deadband and a 55% sample filter, then
+  jumped on arrival. The same route had maximum lag of 2.90/4.80 m and largest
+  jumps of 2.25/3.30 m at 12/20 m accuracy. Follow copied those sample jumps.
+- The existing ticker discarded elapsed gaps of 250 ms or longer. This can
+  freeze playback during stalls; no device profile established whether stalls
+  contributed to the outdoor report. Conditional mounting could also discard
+  the animation instance on temporarily missing/offscreen projections.
+- Each projection rebuilt MapScreen. Redundant camera reads and sample-time
+  zoom/pitch resets added work. Follow used abrupt setCamera calls, not
+  competing easeTo animations.
 
-`test/cowboy_motion_test.dart` uses explicitly synthetic GPS only, never a recorded
-location history. Runtime atlas verification checks transparency, unclipped bounds,
-distinct animated frames and the master hash. Build/analyze, sprite playback and
-synthetic walk/stop/turn/exit checks are the requested scope. No input automation,
-touch tests, video capture or device installation is part of this task. Native
-Mapbox/GPS alignment and subjective appearance remain for manual review.
+### Current behavior
 
-The focused run passed 15 checks: six synthetic GPS/motion cases, offscreen
-Flutter sprite playback/standing/camera-relative orientation, and eight campus
-policy/style cases. The actual 390×844 offscreen standing/walking frames were
-inspected; these have a plain test background, not a native Mapbox screenshot.
-No tests inject mouse, keyboard or touch input. The analyzer excludes the
-established ignored `tmp/` and `output/` folders so earlier diagnostic Dart
-source copies are not analyzed as application files.
+CowboyMotion measures cadence and separates accumulated evidence from walking
+expiry. Two coherent segments above max(1.8 m, min(3.5 m, accuracy × 0.15)) start
+walking; genuinely reported reliable provider speed can corroborate the first
+segment. Missing speed/accuracy is never interpreted as measured zero. Travel
+must be 0.45–3.5 m/s. Stationary samples settle to idle; missing samples stop
+walking after a cadence-dependent 3–8 seconds. Playback is bounded to 0.8–1.35×
+the source speed. Invalid, stale, duplicate or implausible fixes do not walk.
 
-Android universal debug build succeeded without installation. Every packaged
-cowboy asset was byte-compared with its source, and the debug kernel's embedded
-motion/sprite/map/location source was compared with the checked files. The build
-also contains concurrent opening-screen work; that work is independently owned.
-Build SHA-256: `6952055e261860e850e3629cad8dc6afe46a6d821700398ae6708b010a05f081`.
-Detailed local verification is in ignored `tmp/avatar/build-verification.json`.
-Full Flutter analysis passed after excluding the diagnostic folders. iOS was
-not compiled. The saved build is `build/app/outputs/flutter-apk/app-debug.apk`;
-future builds may replace it, so compare its hash before reusing this evidence.
+CowboyTravel separates accepted targets from cosmetic position. A single 160 ms
+time constant and a 650 ms settling budget after the last target replace stacked
+filters. New updates continue from the current display point. There is no
+prediction or extrapolation. Reacquisition after an 8-second gap or 25 m jump
+uses the new fix rather than inventing intervening travel. Fixes older than
+6 seconds cannot supply new targets. Small idle jitter is suppressed cosmetically.
+Campus and game eligibility still use the original GPS policy/raw fixes, never
+this display position. The old marker filter is not fed into this smoother.
+GPS cadence/accuracy and native scheduling still limit responsiveness.
+
+One persistent CowboySprite retains decoded atlases and loop phase across GPS,
+direction/pitch changes and projection loss. Flutter vsync advances the loop
+independently of GPS, pauses for idle/inactivity, and repaints only the avatar
+canvas. Camera-relative heading has a 6° switching margin; pitch has a 3° margin.
+The upright sprite is not rotated as an arrow. The separate Flame host does not
+advance this Flutter-owned animation.
+
+Display projection is requested at most every 33 ms. LatestProjection permits
+one native read and one pending latest refresh, rejecting results invalidated
+by new GPS, camera or lifecycle state. Camera state comes from installed SDK
+events; avatar-only ValueNotifier updates replace map-tree rebuilds. Follow
+sends serial center updates at most every 66 ms, without restarted easing or
+sample-time zoom/pitch resets. Manual-pan suspension, campus bounds, selected
+exploration zoom and View campus remain intact. These are request budgets,
+not measured device frame rates. The above-building limitation is unchanged.
+
+### Focused evidence and limits
+
+The cowboy tests cover the cadence failure, continuous retargeting, 300 ms
+frame gaps, facing hysteresis and obsolete asynchronous projections. A short
+synthetic route covers start, steady walk, turn, stop, stale data and camera-only
+changes. Runtime frames 11, 2 and 5 appear at 5.1, 5.4 and 5.7 seconds without
+another GPS arrival. Phase survives updates, state survives stale visibility
+loss, and the test background builds only once.
+
+At synthetic 60 Hz, maximum displayed step was 0.119 m; residual to an accepted
+1.2 m step was 0.053 m after 500 ms. Walking was active in 21/25 samples at
+12 m accuracy and 19/25 at 20 m. Initial evidence-gathering delay is intentional.
+These are synthetic display metrics, not GPS accuracy or measured device FPS.
+
+[Full runtime frames, native 390×844 viewports](evidence/cowboy-walk-repair-full.png)
+and [supplementary 2× crops](evidence/cowboy-walk-repair.png) use a plain test
+background, not native Mapbox screenshots. Local metrics are in ignored
+tmp/avatar-repair. No input automation, touch tests, recording, installation or
+deployment was performed for this repair. Native alignment, outdoor GPS, iOS
+and on-device UI/raster profile timing remain unverified.
+
+APIs checked against installed Flutter 3.47.7, Mapbox Flutter 2.26.0,
+geolocator platform interface 4.4.0 and Flame 1.38.2. References read:
+[Ticker](https://api.flutter.dev/flutter/scheduler/Ticker-class.html),
+[Mapbox animations](https://docs.mapbox.com/flutter/maps/guides/camera-and-animation/animations/),
+[camera](https://docs.mapbox.com/flutter/maps/guides/camera-and-animation/camera/),
+[Flame sprite lifecycle](https://docs.flame-engine.org/latest/flame/components/sprite_components.html),
+[performance measurement](https://docs.flutter.dev/perf/rendering-performance).
+
+Repair validation: full Flutter analysis passed; all 11 focused cowboy checks
+passed. The uninstalled ARM64 Android profile build is saved at
+`output/cowboy-player/UTRGV-GO-cowboy-walk-repair-arm64-profile.apk`, SHA-256
+`733cb8a9810bd9710c87e3de70784ce4786a47600d209c53cdace01ddcabe05b`.
+Packaged cowboy assets were compared byte-for-byte with source; the approved
+master hash still matches its manifest. Player source stayed unchanged during
+compilation; final MapScreen whitespace was checked against Dart formatter
+output from the built source. Local build/source records are in
+`tmp/avatar-repair/build-verification.json` and `format-equivalence.json`.
 
 Animation provenance: existing Quaternius Universal Animation Library Standard v3
 `Walk_Loop` (CC0), retained in the source production records. Glove source: CC0

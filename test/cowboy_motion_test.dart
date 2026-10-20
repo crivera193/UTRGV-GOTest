@@ -82,9 +82,10 @@ void main() {
     expect(m.walking, isFalse);
     fix(m, 10, 5.2, 5.2);
     fix(m, 12, 7.8, 5.2);
+    fix(m, 14, 10.4, 5.2);
     expect(m.walking, isTrue);
     expect(m.heading, closeTo(90, 0.01));
-    fix(m, 14, 10.4, 5.2, inside: false);
+    fix(m, 16, 13.0, 5.2, inside: false);
     expect(m.walking, isFalse);
   });
 

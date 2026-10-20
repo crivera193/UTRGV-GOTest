@@ -1,27 +1,36 @@
 import 'dart:convert';
 import 'dart:ui' as ui;
-
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
-
 import 'cowboy_motion.dart';
+import 'cowboy_playback.dart';
 
-/// Transparent screen overlay. Feet use Mapbox's projected GPS ground point.
-/// This deliberate always-visible marker does not share building depth.
+class CowboyPlacement {
+  const CowboyPlacement(this.ground, this.bearing, this.pitch, this.zoom);
+  final Offset ground;
+  final double bearing, pitch, zoom;
+}
+
+/// One persistent overlay and animation clock. Projection updates rebuild only
+/// this overlay; loop advancement repaints only its canvas, never the map tree.
 class CowboySprite extends StatefulWidget {
   const CowboySprite({
     super.key,
     required this.motion,
-    required this.ground,
-    required this.bearing,
-    required this.pitch,
-    required this.zoom,
+    this.ground = Offset.zero,
+    this.bearing = 0,
+    this.pitch = 45,
+    this.zoom = 17.5,
+    this.placement,
+    this.active = true,
   });
   final CowboyMotion motion;
   final Offset ground;
   final double bearing, pitch, zoom;
-
+  final ValueListenable<CowboyPlacement?>? placement;
+  final bool active;
   @override
   State<CowboySprite> createState() => _CowboySpriteState();
 }
@@ -29,63 +38,111 @@ class CowboySprite extends StatefulWidget {
 class _CowboySpriteState extends State<CowboySprite>
     with SingleTickerProviderStateMixin {
   late final Ticker _ticker;
+  final _playback = CowboyPlayback();
+  final _facing = CowboyFacing();
   final List<ui.Image> _images = [];
   List<Offset> _anchors = [];
   Duration? _previous;
-  double _phase = 0;
-  double _cycle = 40 / 30;
   bool _failed = false;
-
+  CowboyPlacement? get _placement => widget.placement == null
+      ? CowboyPlacement(
+          widget.ground,
+          widget.bearing,
+          widget.pitch,
+          widget.zoom,
+        )
+      : widget.placement!.value;
   @override
   void initState() {
     super.initState();
     _ticker = createTicker((elapsed) {
-      final dt = _previous == null
+      final seconds = _previous == null
           ? 0.0
           : (elapsed - _previous!).inMicroseconds / 1000000;
       _previous = elapsed;
-      if (widget.motion.walking && dt < 0.25 && _images.length == 3) {
-        setState(
-          () =>
-              _phase = (_phase + dt * widget.motion.playbackRate / _cycle) % 1,
-        );
-      }
-    })..start();
+      _playback.advance(
+        seconds,
+        walking: widget.motion.walking,
+        rate: widget.motion.playbackRate,
+      );
+    });
+    widget.placement?.addListener(_syncTicker);
     _load();
+  }
+
+  void _syncTicker() {
+    if (!mounted) return;
+    _playback.advance(
+      0,
+      walking: widget.motion.walking,
+      rate: widget.motion.playbackRate,
+    );
+    final enabled =
+        widget.active &&
+        _placement != null &&
+        _images.length == 3 &&
+        widget.motion.walking &&
+        TickerMode.valuesOf(context).enabled;
+    if (enabled && !_ticker.isActive) {
+      _previous = null;
+      _ticker.start();
+    } else if (!enabled && _ticker.isActive) {
+      _ticker.stop();
+      _previous = null;
+    }
+  }
+
+  @override
+  void didUpdateWidget(CowboySprite old) {
+    super.didUpdateWidget(old);
+    if (old.placement != widget.placement) {
+      old.placement?.removeListener(_syncTicker);
+      widget.placement?.addListener(_syncTicker);
+    }
+    _syncTicker();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _previous = null;
+    _syncTicker();
   }
 
   Future<void> _load() async {
     final loaded = <ui.Image>[];
     try {
       const base = 'assets/player/cowboy/';
-      final manifest =
+      final m =
           jsonDecode(await rootBundle.loadString('${base}manifest.json'))
               as Map<String, dynamic>;
-      for (final name in manifest['atlases'] as List) {
-        final bytes = await rootBundle.load('$base$name');
+      final anchors = [
+        for (final a in m['anchors'] as List)
+          Offset((a[0] as num).toDouble(), (a[1] as num).toDouble()),
+      ];
+      for (final name in m['atlases'] as List) {
+        final b = await rootBundle.load('$base$name');
         final codec = await ui.instantiateImageCodec(
-          bytes.buffer.asUint8List(bytes.offsetInBytes, bytes.lengthInBytes),
+          b.buffer.asUint8List(b.offsetInBytes, b.lengthInBytes),
         );
         loaded.add((await codec.getNextFrame()).image);
         codec.dispose();
       }
       if (!mounted) {
-        for (final image in loaded) {
-          image.dispose();
+        for (final i in loaded) {
+          i.dispose();
         }
         return;
       }
       setState(() {
         _images.addAll(loaded);
-        _cycle = (manifest['duration_seconds'] as num).toDouble();
-        _anchors = [
-          for (final a in manifest['anchors'] as List)
-            Offset((a[0] as num).toDouble(), (a[1] as num).toDouble()),
-        ];
+        _anchors = anchors;
+        _playback.cycleSeconds = (m['duration_seconds'] as num).toDouble();
       });
+      _syncTicker();
     } catch (_) {
-      for (final image in loaded) {
-        image.dispose();
+      for (final i in loaded) {
+        i.dispose();
       }
       if (mounted) setState(() => _failed = true);
     }
@@ -93,15 +150,28 @@ class _CowboySpriteState extends State<CowboySprite>
 
   @override
   void dispose() {
+    widget.placement?.removeListener(_syncTicker);
     _ticker.dispose();
-    for (final image in _images) {
-      image.dispose();
+    _playback.dispose();
+    for (final i in _images) {
+      i.dispose();
     }
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    if (widget.placement != null) {
+      return ValueListenableBuilder<CowboyPlacement?>(
+        valueListenable: widget.placement!,
+        builder: (_, p, _) => _buildSprite(p),
+      );
+    }
+    return _buildSprite(_placement);
+  }
+
+  Widget _buildSprite(CowboyPlacement? p) {
+    if (!widget.active || p == null) return const SizedBox.shrink();
     if (_failed) {
       return const Positioned(
         bottom: 100,
@@ -113,34 +183,26 @@ class _CowboySpriteState extends State<CowboySprite>
       );
     }
     if (_images.length != 3) return const SizedBox.shrink();
-    final pitchIndex = widget.pitch < 15
-        ? 0
-        : widget.pitch < 40
-        ? 1
-        : 2;
-    final direction =
-        (((widget.motion.heading - widget.bearing + 360) % 360) / 45).round() %
-        8;
-    final frame = widget.motion.walking
-        ? (_phase * 12).floor().clamp(0, 11)
-        : 12;
-    // Bounded cartographic exaggeration: never scale exponentially with zoom.
-    final height = (64 + (widget.zoom - 16) * 5).clamp(48.0, 84.0);
-    final width = height * 160 / 192;
-    final anchor = _anchors[pitchIndex];
+    final pitch = _facing.pitch(p.pitch),
+        direction = _facing.direction(widget.motion.heading, p.bearing);
+    final height = (64 + (p.zoom - 16) * 5).clamp(48.0, 84.0),
+        width = height * 160 / 192;
+    final anchor = _anchors[pitch];
     return Positioned(
-      left: widget.ground.dx - anchor.dx * width,
-      top: widget.ground.dy - anchor.dy * height,
+      left: p.ground.dx - anchor.dx * width,
+      top: p.ground.dy - anchor.dy * height,
       width: width,
       height: height,
       child: IgnorePointer(
-        child: Semantics(
-          label: widget.motion.walking
-              ? 'Cowboy walking at your GPS position'
-              : 'Cowboy standing at your GPS position',
-          child: CustomPaint(
-            key: const ValueKey('cowboy-runtime-frame'),
-            painter: _SpritePainter(_images[pitchIndex], direction, frame),
+        child: RepaintBoundary(
+          child: Semantics(
+            label: widget.motion.walking
+                ? 'Cowboy walking at your GPS position'
+                : 'Cowboy standing at your GPS position',
+            child: CustomPaint(
+              key: const ValueKey('cowboy-runtime-frame'),
+              painter: CowboyFramePainter(_images[pitch], direction, _playback),
+            ),
           ),
         ),
       ),
@@ -148,21 +210,26 @@ class _CowboySpriteState extends State<CowboySprite>
   }
 }
 
-class _SpritePainter extends CustomPainter {
-  _SpritePainter(this.image, this.direction, this.frame);
+class CowboyFramePainter extends CustomPainter {
+  CowboyFramePainter(this.image, this.direction, this.playback)
+    : super(repaint: playback);
   final ui.Image image;
-  final int direction, frame;
+  final int direction;
+  final CowboyPlayback playback;
+  int get frame => playback.frame;
   @override
-  void paint(Canvas canvas, Size size) {
-    canvas.drawImageRect(
+  void paint(Canvas c, Size size) {
+    c.drawImageRect(
       image,
-      Rect.fromLTWH(frame * 160, direction * 192, 160, 192),
+      Rect.fromLTWH(playback.frame * 160, direction * 192, 160, 192),
       Offset.zero & size,
       Paint()..filterQuality = FilterQuality.medium,
     );
   }
 
   @override
-  bool shouldRepaint(_SpritePainter old) =>
-      old.image != image || old.direction != direction || old.frame != frame;
+  bool shouldRepaint(CowboyFramePainter old) =>
+      old.image != image ||
+      old.direction != direction ||
+      old.playback != playback;
 }

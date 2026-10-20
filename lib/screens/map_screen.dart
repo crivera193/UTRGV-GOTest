@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:geolocator/geolocator.dart' as gps;
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' hide Size;
 import 'package:permission_handler/permission_handler.dart';
@@ -16,6 +17,8 @@ import '../map/campus_style.dart';
 import '../map/campus_presentation.dart';
 import '../map/campus_zoom_controls.dart';
 import '../player/cowboy_motion.dart';
+import '../player/cowboy_travel.dart';
+import '../player/latest_projection.dart';
 import '../player/cowboy_sprite.dart';
 import '../widgets/mapbox_configuration_notice.dart';
 
@@ -25,7 +28,8 @@ class MapScreen extends StatefulWidget {
   State<MapScreen> createState() => _MapScreenState();
 }
 
-class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
+class _MapScreenState extends State<MapScreen>
+    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   MapboxMap? _map;
   CampusGeography? _geography;
   CampusLocationPolicy? _location;
@@ -42,12 +46,15 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   Size? _size;
   int _locationGeneration = 0;
   final _cowboyMotion = CowboyMotion();
-  Offset? _cowboyGround;
-  double _cameraBearing = 0,
-      _cameraPitch = CampusPresentation.pitch,
-      _cameraZoom = 14;
-  int _projectionGeneration = 0;
-  bool _projectionBusy = false, _projectionQueued = false;
+  final _travel = CowboyTravel();
+  final _cowboyPlacement = ValueNotifier<CowboyPlacement?>(null);
+  late final Ticker _travelTicker;
+  late final LatestProjection<CowboyPlacement> _projector;
+  CameraState? _cameraState;
+  Duration? _previousTravelTick;
+  Duration _lastProjectionTick = Duration.zero, _lastFollowTick = Duration.zero;
+  bool _followBusy = false, _followQueued = false, _followNeedsZoom = false;
+  CampusPoint? _lastFollowCenter;
   bool _foreground = true;
   final _proximity = SpotProximity(configuredGameSpots);
   bool _gameOpen = false;
@@ -56,6 +63,13 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _projector = LatestProjection<CowboyPlacement>(
+      read: _readCowboyProjection,
+      apply: (placement) {
+        if (mounted) _cowboyPlacement.value = placement;
+      },
+    );
+    _travelTicker = createTicker(_advanceTravel);
     if (hasMapboxConfiguration) unawaited(_loadCampus());
   }
 
@@ -265,18 +279,21 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   }
 
   void _manualCamera() {
+    _followQueued = false;
     if (!_gameOpen && _following && mounted) setState(() => _following = false);
   }
 
   void _cameraChanged(CameraChangedEventData event) {
+    _cameraState = event.cameraState;
     if (_hasFitted && !_fitting) {
       _cameraSession.rememberZoom(event.cameraState.zoom);
     }
-    unawaited(_projectCowboy());
+    unawaited(_projector.request(invalidate: true));
   }
 
   Future<void> _followMe() async {
     if (!_ready || _requesting || _fitting) return;
+    _followNeedsZoom = true;
     _cameraSession.explore();
     if (_location?.marker != null && _locationEnabled) {
       setState(() => _following = true);
@@ -323,7 +340,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     await _stopGps();
     final generation = _locationGeneration;
     _cowboyMotion.stop();
-    _cowboyGround = null;
+    _clearTravel();
     _location!.begin(DateTime.now());
     final enabled = await gps.Geolocator.isLocationServiceEnabled();
     if (!mounted || !_foreground || generation != _locationGeneration) return;
@@ -357,6 +374,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                 onCampus: _location!.state == CampusGpsState.onCampus,
                 now: DateTime.now(),
               );
+              _projector.cancel();
               _cowboyMotion.accept(
                 longitude: p.longitude,
                 latitude: p.latitude,
@@ -364,7 +382,29 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                 timestamp: p.timestamp,
                 now: DateTime.now(),
                 onCampus: _location!.state == CampusGpsState.onCampus,
+                measuredSpeed: p.hasSpeed ? p.speed : null,
+                speedAccuracy: p.hasSpeedAccuracy ? p.speedAccuracy : null,
               );
+              final fixAge = DateTime.now()
+                  .difference(p.timestamp)
+                  .inMilliseconds;
+              if (_location!.state == CampusGpsState.onCampus &&
+                  fixAge >= -2000 &&
+                  fixAge <= 6000) {
+                _travel.accept(
+                  CampusPoint(p.longitude, p.latitude),
+                  p.timestamp,
+                  accuracy: p.accuracy,
+                  walking: _cowboyMotion.walking,
+                );
+                if (_travel.moving && !_travelTicker.isActive && !_gameOpen) {
+                  _previousTravelTick = null;
+                  _lastProjectionTick = _lastFollowTick = Duration.zero;
+                  _travelTicker.start();
+                }
+              } else {
+                _clearTravel();
+              }
               unawaited(_refreshLocation());
             },
             onError: (Object _) {
@@ -404,6 +444,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     _locationGeneration++;
     _proximity.unavailable();
     _cowboyMotion.stop();
+    _clearTravel();
     _expiry?.cancel();
     _expiry = null;
     final positions = _positions, services = _services;
@@ -422,9 +463,9 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     }
     if (_gameOpen) return;
     if (_location?.marker == null) {
-      _cowboyGround = null;
+      _clearTravel();
       _cowboyMotion.stop();
-      _projectionGeneration++;
+      _projector.cancel();
     }
     if (_location?.marker == null &&
         _location?.state != CampusGpsState.waiting) {
@@ -444,7 +485,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
   Future<void> _renderPlayer() async {
     if (_map == null || !_styleLoaded) return;
-    final p = _location?.marker;
+    final p = _location?.marker == null ? null : _travel.target;
     final data = p == null
         ? CampusStyle.empty
         : {
@@ -465,71 +506,115 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     await _projectCowboy();
   }
 
-  // Mapbox returns logical screen pixels. Reproject on GPS and camera changes;
-  // camera movement never changes the geographic position or walk evidence.
-  Future<void> _projectCowboy() async {
-    // Coalesce camera events: slow native calls must not starve all projections
-    // while a gesture is ongoing, or create an unbounded queue of native work.
-    _projectionQueued = true;
-    if (_projectionBusy) return;
-    _projectionBusy = true;
-    try {
-      do {
-        _projectionQueued = false;
-        await _readCowboyProjection();
-      } while (_projectionQueued && mounted);
-    } finally {
-      _projectionBusy = false;
+  void _clearTravel() {
+    _travel.clear();
+    _travelTicker.stop();
+    _previousTravelTick = null;
+    _projector.cancel();
+    _cowboyPlacement.value = null;
+  }
+
+  void _advanceTravel(Duration elapsed) {
+    if (!_foreground || _gameOpen || _location?.marker == null) {
+      _travelTicker.stop();
+      _previousTravelTick = null;
+      return;
+    }
+    final dt = _previousTravelTick == null
+        ? 0.0
+        : (elapsed - _previousTravelTick!).inMicroseconds / 1000000;
+    _previousTravelTick = elapsed;
+    final changed = _travel.advance(dt, contains: _geography!.contains);
+    if (changed &&
+        elapsed - _lastProjectionTick >= const Duration(milliseconds: 33)) {
+      _lastProjectionTick = elapsed;
+      unawaited(_projectCowboy());
+    }
+    if (changed &&
+        _following &&
+        elapsed - _lastFollowTick >= const Duration(milliseconds: 66)) {
+      _lastFollowTick = elapsed;
+      unawaited(_followPosition());
+    }
+    if (!_travel.moving) {
+      _travelTicker.stop();
+      _previousTravelTick = null;
+      unawaited(_projectCowboy());
+      if (_following) unawaited(_followPosition());
     }
   }
 
-  Future<void> _readCowboyProjection() async {
-    final generation = _projectionGeneration;
-    final map = _map;
-    final p = _location?.marker;
-    if (map == null || !_styleLoaded || !_foreground || p == null) {
-      if (mounted && _cowboyGround != null) {
-        setState(() => _cowboyGround = null);
-      }
-      return;
+  Future<void> _projectCowboy() => _projector.request();
+
+  // One logical-pixel projection per native read. Latest camera event supplies
+  // bearing/pitch; camera/new-fix invalidation discards an obsolete reply.
+  Future<CowboyPlacement?> _readCowboyProjection() async {
+    final map = _map, p = _travel.position;
+    if (map == null ||
+        !_styleLoaded ||
+        !_foreground ||
+        _gameOpen ||
+        _location?.marker == null ||
+        p == null) {
+      return null;
     }
-    try {
-      final camera = await map.getCameraState();
-      final screen = await map.pixelForCoordinate(_point(p));
-      if (!mounted ||
-          generation != _projectionGeneration ||
-          !_foreground ||
-          _location?.marker != p) {
-        return;
-      }
-      final size = _size;
-      final visible =
-          screen.x.isFinite &&
-          screen.y.isFinite &&
-          size != null &&
-          screen.x >= 0 &&
-          screen.y >= 0 &&
-          screen.x <= size.width &&
-          screen.y <= size.height;
-      setState(() {
-        _cowboyGround = visible ? Offset(screen.x, screen.y) : null;
-        _cameraBearing = camera.bearing;
-        _cameraPitch = camera.pitch;
-        _cameraZoom = camera.zoom;
-      });
-    } catch (_) {
-      if (mounted && generation == _projectionGeneration) {
-        setState(() => _cowboyGround = null);
-      }
+    final camera = _cameraState ?? await map.getCameraState();
+    final screen = await map.pixelForCoordinate(_point(p));
+    final size = _size;
+    if (size == null ||
+        !screen.x.isFinite ||
+        !screen.y.isFinite ||
+        screen.x < 0 ||
+        screen.y < 0 ||
+        screen.x > size.width ||
+        screen.y > size.height) {
+      return null;
     }
+    return CowboyPlacement(
+      Offset(screen.x, screen.y),
+      camera.bearing,
+      camera.pitch,
+      camera.zoom,
+    );
   }
 
   Future<void> _followPosition() async {
-    final p = _location?.marker;
-    if (p != null && _following) {
-      await _moveCamera(
-        CameraOptions(center: _point(p), zoom: _cameraSession.explorationZoom),
-      );
+    _followQueued = true;
+    if (_followBusy) return;
+    _followBusy = true;
+    try {
+      while (_followQueued &&
+          mounted &&
+          _following &&
+          _foreground &&
+          !_gameOpen) {
+        _followQueued = false;
+        final map = _map, c = _geography, p = _travel.position;
+        if (map == null || c == null || p == null) break;
+        if (!_followNeedsZoom &&
+            _lastFollowCenter != null &&
+            CampusGeography.distance(_lastFollowCenter!, p) < 0.02) {
+          continue;
+        }
+        _lastFollowCenter = p;
+        if (_followNeedsZoom) {
+          _followNeedsZoom = false;
+          await _moveCamera(
+            CameraOptions(
+              center: _point(p),
+              zoom: _cameraSession.explorationZoom,
+            ),
+          );
+        } else {
+          // Already interpolated: one serial center update, no competing easing,
+          // no repeated zoom/pitch reset on every GPS sample.
+          await map.setCamera(
+            CameraOptions(center: _point(c.clampCameraCenter(p))),
+          );
+        }
+      }
+    } finally {
+      _followBusy = false;
     }
   }
 
@@ -563,9 +648,9 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         state == AppLifecycleState.inactive ||
         state == AppLifecycleState.hidden) {
       _foreground = false;
-      _projectionGeneration++;
+      _projector.cancel();
       _cowboyMotion.stop();
-      if (mounted) setState(() => _cowboyGround = null);
+      _clearTravel();
       if (!_gameOpen) _following = false;
       _proximity.unavailable();
       _location?.clear(CampusGpsState.stale);
@@ -634,6 +719,9 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     unawaited(_stopGps());
+    _travelTicker.dispose();
+    _projector.dispose();
+    _cowboyPlacement.dispose();
     super.dispose();
   }
 
@@ -761,6 +849,12 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                     ),
                   ),
                 ),
+              CowboySprite(
+                key: const ValueKey('persistent-campus-cowboy'),
+                motion: _cowboyMotion,
+                placement: _cowboyPlacement,
+                active: _ready && _error == null && _foreground && !_gameOpen,
+              ),
               if (_ready && _error == null) ...[
                 Positioned(
                   left: 12,
@@ -770,17 +864,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                     onZoomOut: () => unawaited(_zoomBy(-1)),
                   ),
                 ),
-                if (_foreground &&
-                    _location?.state == CampusGpsState.onCampus &&
-                    _location?.marker != null &&
-                    _cowboyGround != null)
-                  CowboySprite(
-                    motion: _cowboyMotion,
-                    ground: _cowboyGround!,
-                    bearing: _cameraBearing,
-                    pitch: _cameraPitch,
-                    zoom: _cameraZoom,
-                  ),
                 Positioned(
                   top: 12,
                   left: 12,
