@@ -1,229 +1,59 @@
-import 'dart:async';
-
-import 'package:campus_app/auth/login_screen.dart';
-import 'package:campus_app/screens/admin_dashboard.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:campus_app/screens/main_screen.dart';
-import 'package:campus_app/screens/username_selection_screen.dart';
+import '../screens/main_screen.dart';
+import 'login_screen.dart';
+import 'student_email.dart';
 
-class AuthGate extends StatefulWidget {
+class AuthGate extends StatelessWidget {
   const AuthGate({super.key});
-
-  @override
-  State<AuthGate> createState() => _AuthGateState();
-}
-
-class _AuthGateState extends State<AuthGate> {
-  final SupabaseClient _supabase = Supabase.instance.client;
-
-  StreamSubscription<AuthState>? _authSubscription;
-  Session? _session;
-  Future<String>? _roleRequest;
-  Object? _authStreamError;
-
-  @override
-  void initState() {
-    super.initState();
-
-    _session = _supabase.auth.currentSession;
-
-    if (_session != null) {
-      _roleRequest = _loadRole(_session!.user.id);
-    }
-
-    _authSubscription = _supabase.auth.onAuthStateChange.listen(
-      (authState) {
-        if (!mounted) return;
-
-        final previousUserId = _session?.user.id;
-        final nextSession = authState.session;
-
-        setState(() {
-          _authStreamError = null;
-          _session = nextSession;
-
-          if (nextSession == null) {
-            _roleRequest = null;
-          } else if (previousUserId != nextSession.user.id ||
-              _roleRequest == null) {
-            _roleRequest = _loadRole(nextSession.user.id);
-          }
-        });
-
-        // When a user signs out, AuthGate will rebuild to show LoginScreen.
-        // However, any pushed routes (Settings/Profile/etc.) remain on the
-        // Navigator stack unless we explicitly unwind them.
-        if (nextSession == null) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (!mounted) return;
-            Navigator.of(context).popUntil((route) => route.isFirst);
-          });
-        }
-      },
-      onError: (Object error, StackTrace stackTrace) {
-        if (!mounted) return;
-
-        setState(() {
-          _authStreamError = error;
-        });
-      },
-    );
-  }
-
-  Future<String> _loadRole(String userId) async {
-    final profile = await _supabase
-        .from('profiles')
-        .select('role, username')
-        .eq('id', userId)
-        .single();
-
-    final role = profile['role'] as String?;
-
-    if (role == null || role.isEmpty) {
-      throw StateError('No account role was found for this user.');
-    }
-
-    final username = profile['username'] as String?;
-    final pendingSelection =
-        _supabase.auth.currentUser?.id == userId &&
-        _supabase.auth.currentUser?.userMetadata?['username_pending'] == true;
-    return pendingSelection || username == null || username.trim().isEmpty
-        ? 'username_required'
-        : role;
-  }
-
-  void _retryRoleLookup() {
-    final user = _session?.user;
-
-    if (user == null) return;
-
-    setState(() {
-      _roleRequest = _loadRole(user.id);
-    });
-  }
-
-  Future<void> _signOut() async {
-    await _supabase.auth.signOut();
-  }
-
-  @override
-  void dispose() {
-    _authSubscription?.cancel();
-    super.dispose();
-  }
-
   @override
   Widget build(BuildContext context) {
-    if (_session == null) {
-      return const LoginScreen();
-    }
-
-    if (_authStreamError != null) {
-      return _ErrorScreen(
-        title: 'Authentication error',
-        message: _authStreamError.toString(),
-        onRetry: _retryRoleLookup,
-        onSignOut: _signOut,
-      );
-    }
-
-    return FutureBuilder<String>(
-      future: _roleRequest,
+    final client = Supabase.instance.client;
+    return StreamBuilder<AuthState>(
+      stream: client.auth.onAuthStateChange,
       builder: (context, snapshot) {
-        if (snapshot.connectionState != ConnectionState.done) {
-          return const _LoadingScreen();
-        }
-
         if (snapshot.hasError) {
-          return _ErrorScreen(
-            title: 'Unable to load account',
-            message:
-                'The app could not retrieve this user’s student or admin role.\n\n'
-                '${snapshot.error}',
-            onRetry: _retryRoleLookup,
-            onSignOut: _signOut,
+          return Scaffold(
+            body: Center(
+              child: TextButton(
+                onPressed: () async {
+                  await client.auth.signOut();
+                },
+                child: const Text(
+                  'Session unavailable. Sign out and try again.',
+                ),
+              ),
+            ),
           );
         }
-
-        switch (snapshot.data) {
-          case 'student':
-            return const MainScreen();
-
-          case 'username_required':
-            return const UsernameSelectionScreen();
-
-          case 'admin':
-            return const AdminDashboard();
-
-          default:
-            return _ErrorScreen(
-              title: 'Invalid account role',
-              message:
-                  'This account does not have a valid student or admin role.',
-              onRetry: _retryRoleLookup,
-              onSignOut: _signOut,
-            );
-        }
-      },
-    );
-  }
-}
-
-class _LoadingScreen extends StatelessWidget {
-  const _LoadingScreen();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Scaffold(body: Center(child: CircularProgressIndicator()));
-  }
-}
-
-class _ErrorScreen extends StatelessWidget {
-  const _ErrorScreen({
-    required this.title,
-    required this.message,
-    required this.onRetry,
-    required this.onSignOut,
-  });
-
-  final String title;
-  final String message;
-  final VoidCallback onRetry;
-  final Future<void> Function() onSignOut;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.error_outline, size: 64),
-                const SizedBox(height: 20),
-                Text(
-                  title,
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+        final user =
+            (snapshot.data?.session ?? client.auth.currentSession)?.user;
+        if (user == null) return const LoginScreen();
+        if (!StudentEmail.isEligible(user.email ?? '')) {
+          return Scaffold(
+            body: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text(
+                      'Use a .edu email account to enter campus exploration.',
+                    ),
+                    TextButton(
+                      onPressed: () async {
+                        await client.auth.signOut();
+                      },
+                      child: const Text('Return to sign in'),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 12),
-                Text(message, textAlign: TextAlign.center),
-                const SizedBox(height: 24),
-                FilledButton(
-                  onPressed: onRetry,
-                  child: const Text('Try again'),
-                ),
-                TextButton(onPressed: onSignOut, child: const Text('Sign out')),
-              ],
+              ),
             ),
-          ),
-        ),
-      ),
+          );
+        }
+        return const MainScreen();
+      },
     );
   }
 }

@@ -1,241 +1,183 @@
-import 'package:campus_app/auth/signup_screen.dart';
-import 'package:campus_app/auth/spark_auth_shell.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'student_email.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
-
   @override
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _formKey = GlobalKey<FormState>();
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
-
-  final SupabaseClient _supabase = Supabase.instance.client;
-
-  bool _isLoading = false;
-  bool _obscurePassword = true;
-  String? _errorMessage;
-
+  final _form = GlobalKey<FormState>();
+  final _email = TextEditingController();
+  final _password = TextEditingController();
+  bool _signUp = false, _busy = false, _obscure = true;
+  String? _message;
   @override
   void dispose() {
-    _emailController.dispose();
-    _passwordController.dispose();
+    _email.dispose();
+    _password.dispose();
     super.dispose();
   }
 
-  Future<void> _signIn() async {
-    FocusScope.of(context).unfocus();
-
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
-
+  Future<void> _submit() async {
+    if (_busy || !_form.currentState!.validate()) return;
     setState(() {
-      _isLoading = true;
-      _errorMessage = null;
+      _busy = true;
+      _message = null;
     });
-
     try {
-      final response = await _supabase.auth.signInWithPassword(
-        email: _emailController.text.trim().toLowerCase(),
-        password: _passwordController.text,
-      );
-
-      if (response.session == null) {
-        throw StateError('Supabase did not create a login session.');
+      final client = Supabase.instance.client;
+      final email = _email.text.trim().toLowerCase();
+      if (_signUp) {
+        final response = await client.auth.signUp(
+          email: email,
+          password: _password.text,
+        );
+        if (mounted && response.session == null) {
+          setState(() {
+            _signUp = false;
+            _message =
+                'Account created. Instant sign-in is unavailable because email confirmation is enabled in the account service.';
+          });
+        }
+      } else {
+        await client.auth.signInWithPassword(
+          email: email,
+          password: _password.text,
+        );
       }
-
-      // AuthGate detects the new session and sends the user to either
-      // MapScreen or AdminDashboard based on the profiles.role value.
+      _password.clear();
     } on AuthException catch (error) {
-      if (!mounted) return;
-
-      setState(() {
-        _errorMessage = error.message;
-      });
-    } catch (error) {
-      if (!mounted) return;
-
-      setState(() {
-        _errorMessage = 'Unable to sign in. Please try again.\n$error';
-      });
+      if (mounted) {
+        setState(() => _message = error.message);
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _message = 'Unable to reach the account service. Try again.',
+        );
+      }
     } finally {
       if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
+        setState(() => _busy = false);
       }
     }
-  }
-
-  void _openStudentSignup() {
-    Navigator.of(
-      context,
-    ).push(MaterialPageRoute<void>(builder: (context) => const SignupScreen()));
   }
 
   @override
-  Widget build(BuildContext context) {
-    final themed = Theme.of(context).copyWith(
-      inputDecorationTheme: sparkAuthInputTheme(),
-      textTheme: Theme.of(
-        context,
-      ).textTheme.apply(bodyColor: Colors.white, displayColor: Colors.white),
-    );
-
-    return SparkAuthShell(
-      panel: Theme(
-        data: themed,
-        child: Form(
-          key: _formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextFormField(
-                controller: _emailController,
-                keyboardType: TextInputType.emailAddress,
-                textInputAction: TextInputAction.next,
-                autofillHints: const [
-                  AutofillHints.email,
-                  AutofillHints.username,
-                ],
-                style: const TextStyle(color: Colors.white),
-                decoration: const InputDecoration(
-                  labelText: 'Email',
-                  hintText: 'name@utrgv.edu',
-                  prefixIcon: Icon(Icons.email_outlined),
-                ),
-                validator: (value) {
-                  final email = value?.trim() ?? '';
-
-                  if (email.isEmpty) {
-                    return 'Enter your email address.';
-                  }
-
-                  final emailPattern = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
-
-                  if (!emailPattern.hasMatch(email)) {
-                    return 'Enter a valid email address.';
-                  }
-
-                  return null;
-                },
-              ),
-              const SizedBox(height: 28),
-              TextFormField(
-                controller: _passwordController,
-                obscureText: _obscurePassword,
-                textInputAction: TextInputAction.done,
-                autofillHints: const [AutofillHints.password],
-                style: const TextStyle(color: Colors.white),
-                onFieldSubmitted: (_) {
-                  if (!_isLoading) {
-                    _signIn();
-                  }
-                },
-                decoration: InputDecoration(
-                  labelText: 'Password',
-                  prefixIcon: const Icon(Icons.lock_outline),
-                  suffixIcon: IconButton(
-                    tooltip: _obscurePassword
-                        ? 'Show password'
-                        : 'Hide password',
-                    onPressed: () {
-                      setState(() {
-                        _obscurePassword = !_obscurePassword;
-                      });
-                    },
-                    icon: Icon(
-                      _obscurePassword
-                          ? Icons.visibility_outlined
-                          : Icons.visibility_off_outlined,
+  Widget build(BuildContext context) => Scaffold(
+    body: SafeArea(
+      child: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 420),
+            child: Form(
+              key: _form,
+              child: AutofillGroup(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Text(
+                      'Campus Explorer',
+                      style: Theme.of(context).textTheme.headlineMedium,
                     ),
-                  ),
-                ),
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Enter your password.';
-                  }
-
-                  return null;
-                },
-              ),
-              if (_errorMessage != null) ...[
-                const SizedBox(height: 24),
-                Text(
-                  _errorMessage!,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    color: Color(0xFFFFB4A8),
-                    fontWeight: FontWeight.w600,
-                    height: 1.25,
-                    shadows: [Shadow(color: Color(0xAA000000), blurRadius: 10)],
-                  ),
-                ),
-              ],
-              const SizedBox(height: 32),
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: ElevatedButton(
-                  onPressed: _isLoading ? null : _signIn,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0E3A76),
-                    foregroundColor: Colors.white,
-                    disabledBackgroundColor: const Color(
-                      0xFF0E3A76,
-                    ).withValues(alpha: 0.55),
-                    disabledForegroundColor: Colors.white.withValues(
-                      alpha: 0.75,
+                    const SizedBox(height: 8),
+                    Text(
+                      _signUp
+                          ? 'Create an account with your .edu email.'
+                          : 'Sign in with your .edu email.',
                     ),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
+                    const SizedBox(height: 24),
+                    TextFormField(
+                      controller: _email,
+                      enabled: !_busy,
+                      keyboardType: TextInputType.emailAddress,
+                      autocorrect: false,
+                      autofillHints: const [AutofillHints.email],
+                      decoration: const InputDecoration(
+                        labelText: 'School email',
+                        hintText: 'example@utrgv.edu',
+                      ),
+                      validator: (v) => StudentEmail.isEligible(v ?? '')
+                          ? null
+                          : 'Use a valid email address ending in .edu.',
                     ),
-                  ),
-                  child: _isLoading
-                      ? const SizedBox(
-                          width: 22,
-                          height: 22,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            color: Colors.white,
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _password,
+                      enabled: !_busy,
+                      obscureText: _obscure,
+                      autofillHints: [
+                        _signUp
+                            ? AutofillHints.newPassword
+                            : AutofillHints.password,
+                      ],
+                      decoration: InputDecoration(
+                        labelText: 'Password',
+                        suffixIcon: IconButton(
+                          tooltip: _obscure ? 'Show password' : 'Hide password',
+                          onPressed: () => setState(() => _obscure = !_obscure),
+                          icon: Icon(
+                            _obscure ? Icons.visibility : Icons.visibility_off,
                           ),
-                        )
-                      : const Text(
-                          'Sign in',
-                          style: TextStyle(fontWeight: FontWeight.w700),
                         ),
-                ),
-              ),
-              const SizedBox(height: 22),
-              SizedBox(
-                width: double.infinity,
-                height: 52,
-                child: OutlinedButton(
-                  onPressed: _isLoading ? null : _openStudentSignup,
-                  style: OutlinedButton.styleFrom(
-                    backgroundColor: const Color(0xFF102233),
-                    foregroundColor: Colors.white,
-                    side: const BorderSide(color: Color(0x33FFFFFF)),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(16),
+                      ),
+                      validator: (v) {
+                        if (v == null || v.isEmpty) {
+                          return 'Enter your password.';
+                        }
+                        if (_signUp && v.length < 8) {
+                          return 'Use at least 8 characters.';
+                        }
+                        return null;
+                      },
+                      onFieldSubmitted: (_) {
+                        _submit();
+                      },
                     ),
-                  ),
-                  child: const Text(
-                    'Create an account',
-                    style: TextStyle(fontWeight: FontWeight.w700),
-                  ),
+                    if (_message != null)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        child: Semantics(
+                          liveRegion: true,
+                          child: Text(_message!),
+                        ),
+                      ),
+                    const SizedBox(height: 16),
+                    FilledButton(
+                      onPressed: _busy ? null : _submit,
+                      child: Text(
+                        _busy
+                            ? 'Please wait...'
+                            : _signUp
+                            ? 'Create account'
+                            : 'Sign in',
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: _busy
+                          ? null
+                          : () => setState(() {
+                              _signUp = !_signUp;
+                              _message = null;
+                              _password.clear();
+                            }),
+                      child: Text(
+                        _signUp
+                            ? 'Already have an account? Sign in'
+                            : 'Create an account',
+                      ),
+                    ),
+                  ],
                 ),
               ),
-            ],
+            ),
           ),
         ),
       ),
-    );
-  }
+    ),
+  );
 }

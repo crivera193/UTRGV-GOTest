@@ -1,98 +1,55 @@
-import 'package:campus_app/auth/auth_gate.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'auth/auth_gate.dart';
+import 'config/app_configuration.dart';
+import 'widgets/mapbox_configuration_notice.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  const mapboxToken = String.fromEnvironment('ACCESS_TOKEN');
-
-  if (mapboxToken.isEmpty) {
-    runApp(
-      const ProviderScope(
-        child: MissingMapboxTokenApp(),
-      ),
-    );
-    return;
-  }
-
-  MapboxOptions.setAccessToken(mapboxToken);
-
-  await Supabase.initialize(
-    url: 'https://njtpfiigzvxytwivipxs.supabase.co',
-    anonKey: 'sb_publishable_yJkW8eLqJ9Vod48IthOSQw_x_tSWc8c',
-  );
-
-  runApp(
-    const ProviderScope(
-      child: CampusApp(),
-    ),
-  );
-}
-
-class CampusApp extends ConsumerWidget {
-  const CampusApp({super.key});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return MaterialApp(
-      title: 'UTRGV Campus App',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        colorSchemeSeed: const Color(0xFFF05023),
-      ),
-      home: const AuthGate(),
-    );
-  }
-}
-
-class MissingMapboxTokenApp extends StatelessWidget {
-  const MissingMapboxTokenApp({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Missing Configuration',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-      ),
-      home: const Scaffold(
-        body: SafeArea(
-          child: Center(
-            child: Padding(
-              padding: EdgeInsets.all(24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(
-                    Icons.warning_amber_rounded,
-                    size: 64,
-                  ),
-                  SizedBox(height: 20),
-                  Text(
-                    'Missing Mapbox configuration',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  SizedBox(height: 16),
-                  Text(
-                    'Run the app with the ACCESS_TOKEN '
-                    '--dart-define value.',
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              ),
-            ),
+  if (hasMapboxConfiguration) MapboxOptions.setAccessToken(mapboxAccessToken);
+  String? startupError;
+  if (AppConfiguration.hasBackend) {
+    try {
+      await Supabase.initialize(
+        url: AppConfiguration.supabaseUrl,
+        publishableKey: AppConfiguration.supabaseKey,
+        authOptions: FlutterAuthClientOptions(
+          localStorage: SharedPreferencesLocalStorage(
+            persistSessionKey: 'campus_explorer_v1_session',
           ),
         ),
-      ),
-    );
+      );
+    } catch (_) {
+      startupError =
+          'Unable to connect to the account service. Please restart and try again.';
+    }
   }
+  runApp(CampusApp(startupError: startupError));
+}
+
+class CampusApp extends StatelessWidget {
+  const CampusApp({super.key, this.startupError});
+  final String? startupError;
+  @override
+  Widget build(BuildContext context) => MaterialApp(
+    title: 'Campus Explorer',
+    debugShowCheckedModeBanner: false,
+    theme: ThemeData(
+      useMaterial3: true,
+      colorSchemeSeed: const Color(0xFF795548),
+    ),
+    home: !AppConfiguration.hasBackend
+        ? const Scaffold(
+            body: Center(
+              child: Padding(
+                padding: EdgeInsets.all(24),
+                child: Text('Account service is not configured yet.'),
+              ),
+            ),
+          )
+        : startupError != null
+        ? Scaffold(body: Center(child: Text(startupError!)))
+        : const AuthGate(),
+  );
 }

@@ -1,5 +1,5 @@
 name: campus_app
-description: "A new Flutter project."
+description: "Independent campus exploration game foundation."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -64,25 +64,7 @@ flutter:
   uses-material-design: true
 
   # To add assets to your application, add an assets section, like this:
-  assets:
-      - assets/test_marker.png
-      - assets/litMarker0.png
-      - assets/litMarker1.png
-      - assets/litMarker2.png
-      - assets/litMarker3.png
-      - assets/litMarker4.png
-      - assets/litMarker5.png
-      - assets/litMarker6.png
-      - assets/litMarker7.png
-      - assets/litMarker8.png
-      - assets/litMarker9.png
-      - assets/litMarkerPlus.png
-      - assets/Bon the friendly marshmallow.png
-      - assets/UTRGV_Edinburg_mapskin.png
-      - assets/login_wallpaper.png
-      - assets/sparky.png
-      - assets/Bonfire wood text.png
-      - assets/sparky and bonfire logo.png
+  # Cowboy runtime assets will be registered after mobile export verification.
   #   - images/a_dot_ham.jpeg
 
   # An image asset can refer to one or more resolution-specific "variants", see
