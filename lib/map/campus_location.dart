@@ -26,8 +26,16 @@ class CampusLocationPolicy {
   final CampusGeography geography;
   CampusGpsState state = CampusGpsState.waiting;
   CampusFix? _last;
+  DateTime? _waitingSince;
   CampusPoint? marker;
   bool? _confirmedInside;
+
+  void begin(DateTime now) {
+    _last = null;
+    _waitingSince = now;
+    _confirmedInside = null;
+    clear(CampusGpsState.waiting);
+  }
 
   void accept(CampusFix fix, DateTime now) {
     if (_last != null && !fix.timestamp.isAfter(_last!.timestamp)) return;
@@ -79,6 +87,12 @@ class CampusLocationPolicy {
   }
 
   void expire(DateTime now) {
+    if (_last == null &&
+        _waitingSince != null &&
+        now.difference(_waitingSince!).inSeconds > 20) {
+      clear(CampusGpsState.unavailable);
+      return;
+    }
     if (_last != null && now.difference(_last!.timestamp).inSeconds > 20) {
       clear(CampusGpsState.stale);
     }
@@ -97,7 +111,9 @@ class CampusLocationPolicy {
 
   String get message => switch (state) {
     CampusGpsState.waiting =>
-      'Explore UTRGV Edinburg · enable location to walk',
+      _waitingSince == null
+          ? 'Explore UTRGV Edinburg · enable location to walk'
+          : 'Waiting for a reliable GPS fix',
     CampusGpsState.onCampus => 'On campus',
     CampusGpsState.outside =>
       'You’re outside campus. You can still explore the map.',

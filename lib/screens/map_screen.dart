@@ -9,6 +9,8 @@ import 'package:permission_handler/permission_handler.dart';
 import '../map/campus_geography.dart';
 import '../map/campus_location.dart';
 import '../map/campus_style.dart';
+import '../player/cowboy_motion.dart';
+import '../player/cowboy_sprite.dart';
 import '../widgets/mapbox_configuration_notice.dart';
 
 class MapScreen extends StatefulWidget {
@@ -32,6 +34,12 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   double _minZoom = 12;
   Size? _size;
   int _locationGeneration = 0;
+  final _cowboyMotion = CowboyMotion();
+  Offset? _cowboyGround;
+  double _cameraBearing = 0, _cameraPitch = 45, _cameraZoom = 14;
+  int _projectionGeneration = 0;
+  bool _projectionBusy = false, _projectionQueued = false;
+  bool _foreground = true;
 
   @override
   void initState() {
@@ -244,7 +252,12 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   Future<void> _startGps() async {
     await _stopGps();
     final generation = _locationGeneration;
-    if (!await gps.Geolocator.isLocationServiceEnabled()) {
+    _cowboyMotion.stop();
+    _cowboyGround = null;
+    _location!.begin(DateTime.now());
+    final enabled = await gps.Geolocator.isLocationServiceEnabled();
+    if (!mounted || !_foreground || generation != _locationGeneration) return;
+    if (!enabled) {
       _location!.clear(CampusGpsState.disabled);
     } else {
       _positions =
@@ -264,6 +277,14 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                 ),
                 DateTime.now(),
               );
+              _cowboyMotion.accept(
+                longitude: p.longitude,
+                latitude: p.latitude,
+                accuracy: p.accuracy,
+                timestamp: p.timestamp,
+                now: DateTime.now(),
+                onCampus: _location!.state == CampusGpsState.onCampus,
+              );
               unawaited(_refreshLocation());
             },
             onError: (Object _) {
@@ -272,10 +293,16 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
               unawaited(_refreshLocation());
             },
           );
-      _expiry = Timer.periodic(const Duration(seconds: 5), (_) {
+      _expiry = Timer.periodic(const Duration(seconds: 1), (_) {
         if (!mounted) return;
+        final previousState = _location!.state;
+        final wasWalking = _cowboyMotion.walking;
         _location!.expire(DateTime.now());
-        unawaited(_refreshLocation());
+        _cowboyMotion.expire(DateTime.now());
+        if (previousState != _location!.state ||
+            wasWalking != _cowboyMotion.walking) {
+          unawaited(_refreshLocation());
+        }
       });
     }
     _services = gps.Geolocator.getServiceStatusStream().listen((status) {
@@ -292,6 +319,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
   Future<void> _stopGps() async {
     _locationGeneration++;
+    _cowboyMotion.stop();
     _expiry?.cancel();
     _expiry = null;
     final positions = _positions, services = _services;
@@ -303,6 +331,11 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
   Future<void> _refreshLocation() async {
     if (!mounted) return;
+    if (_location?.marker == null) {
+      _cowboyGround = null;
+      _cowboyMotion.stop();
+      _projectionGeneration++;
+    }
     if (_location?.marker == null &&
         _location?.state != CampusGpsState.waiting) {
       _following = false;
@@ -311,6 +344,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     try {
       await _renderPlayer();
       if (_following) await _followPosition();
+      await _projectCowboy();
     } catch (_) {
       if (mounted) {
         setState(() => _error = 'Map update interrupted. Tap retry.');
@@ -338,6 +372,66 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       'data',
       jsonEncode(data),
     );
+    await _projectCowboy();
+  }
+
+  // Mapbox returns logical screen pixels. Reproject on GPS and camera changes;
+  // camera movement never changes the geographic position or walk evidence.
+  Future<void> _projectCowboy() async {
+    // Coalesce camera events: slow native calls must not starve all projections
+    // while a gesture is ongoing, or create an unbounded queue of native work.
+    _projectionQueued = true;
+    if (_projectionBusy) return;
+    _projectionBusy = true;
+    try {
+      do {
+        _projectionQueued = false;
+        await _readCowboyProjection();
+      } while (_projectionQueued && mounted);
+    } finally {
+      _projectionBusy = false;
+    }
+  }
+
+  Future<void> _readCowboyProjection() async {
+    final generation = _projectionGeneration;
+    final map = _map;
+    final p = _location?.marker;
+    if (map == null || !_styleLoaded || !_foreground || p == null) {
+      if (mounted && _cowboyGround != null) {
+        setState(() => _cowboyGround = null);
+      }
+      return;
+    }
+    try {
+      final camera = await map.getCameraState();
+      final screen = await map.pixelForCoordinate(_point(p));
+      if (!mounted ||
+          generation != _projectionGeneration ||
+          !_foreground ||
+          _location?.marker != p) {
+        return;
+      }
+      final size = _size;
+      final visible =
+          screen.x.isFinite &&
+          screen.y.isFinite &&
+          size != null &&
+          screen.x >= 0 &&
+          screen.y >= 0 &&
+          screen.x <= size.width &&
+          screen.y <= size.height;
+      setState(() {
+        _cowboyGround = visible ? Offset(screen.x, screen.y) : null;
+        _cameraBearing = camera.bearing;
+        _cameraPitch = camera.pitch;
+        _cameraZoom = camera.zoom;
+      });
+    } catch (_) {
+      if (mounted && generation == _projectionGeneration) {
+        setState(() => _cowboyGround = null);
+      }
+    }
   }
 
   Future<void> _followPosition() async {
@@ -373,12 +467,19 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.detached) {
+        state == AppLifecycleState.detached ||
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.hidden) {
+      _foreground = false;
+      _projectionGeneration++;
+      _cowboyMotion.stop();
+      if (mounted) setState(() => _cowboyGround = null);
       _following = false;
       _location?.clear(CampusGpsState.stale);
       unawaited(_stopGps());
-    } else if (state == AppLifecycleState.resumed && _locationEnabled) {
-      unawaited(_resumeGps());
+    } else if (state == AppLifecycleState.resumed) {
+      _foreground = true;
+      if (_locationEnabled) unawaited(_resumeGps());
     }
   }
 
@@ -442,6 +543,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                   },
                   onScrollListener: (_) => _manualCamera(),
                   onZoomListener: (_) => _manualCamera(),
+                  onCameraChangeListener: (_) => unawaited(_projectCowboy()),
                   onMapLoadErrorListener: (event) {
                     // Glyph failure should not hide locally bundled geography.
                     if (event.type == MapLoadErrorType.GLYPHS) return;
@@ -473,6 +575,17 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                   ),
                 ),
               if (_ready && _error == null) ...[
+                if (_foreground &&
+                    _location?.state == CampusGpsState.onCampus &&
+                    _location?.marker != null &&
+                    _cowboyGround != null)
+                  CowboySprite(
+                    motion: _cowboyMotion,
+                    ground: _cowboyGround!,
+                    bearing: _cameraBearing,
+                    pitch: _cameraPitch,
+                    zoom: _cameraZoom,
+                  ),
                 Positioned(
                   top: 12,
                   left: 12,

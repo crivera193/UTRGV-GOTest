@@ -9,6 +9,8 @@
 # packages, and plugins designed to encourage good coding practices.
 analyzer:
   exclude:
+    - tmp/**
+    - output/**
     - build/**
     - android/**
     - ios/**

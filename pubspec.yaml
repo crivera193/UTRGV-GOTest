@@ -64,6 +64,7 @@ flutter:
   uses-material-design: true
   assets:
     - assets/campus/
+    - assets/player/cowboy/
 
   # To add assets to your application, add an assets section, like this:
   # Cowboy runtime assets will be registered after mobile export verification.

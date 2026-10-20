@@ -7,8 +7,8 @@ The former social-events product has been removed in place. The app is named UTR
 - Email/password accounts restricted to .edu addresses, without email verification (all .edu domains, not only UTRGV).
 - Clean account screens and a custom campus-only Mapbox map with opt-in GPS.
 - No events, factions, friends, event moderation, social notifications, Bon/Sparky branding or demo XP.
-- Cowboy authoring source and neutral campus geographic data are retained. They are not yet registered runtime assets.
-- Flame/gameplay and animated 3D character rendering are not integrated in the campus-map slice. It uses a filtered orange player marker.
+- The existing cowboy sprite atlases are registered and connected to the filtered campus GPS position. The cowboy appears only with a valid on-campus fix and hides off campus, on stale/unavailable GPS and while the app is inactive. Location remains opt-in through Follow me.
+- The cowboy uses a rendered sprite overlay with GPS-driven walking/standing; Flame gameplay and live animated 3D rendering are not integrated. Native map alignment and real campus walking remain to be reviewed on-device. See [cowboy source, runtime assets and rendering limits](docs/cowboy-player.md).
 
 ## New Supabase project only
 
