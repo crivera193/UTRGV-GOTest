@@ -1,11 +1,15 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart' as gps;
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' hide Size;
 import 'package:permission_handler/permission_handler.dart';
+import '../games/game_host.dart';
+import '../games/game_spot.dart';
+import '../games/spot_proximity.dart';
 import '../map/campus_geography.dart';
 import '../map/campus_location.dart';
 import '../map/campus_style.dart';
@@ -40,6 +44,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   int _projectionGeneration = 0;
   bool _projectionBusy = false, _projectionQueued = false;
   bool _foreground = true;
+  final _proximity = SpotProximity(configuredGameSpots);
+  bool _gameOpen = false;
 
   @override
   void initState() {
@@ -148,7 +154,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
   Future<void> _viewCampus() async {
     final map = _map, c = _geography;
-    if (map == null || c == null || _fitting) return;
+    if (map == null || c == null || _fitting || _gameOpen) return;
     _fitting = true;
     _following = false;
     // Compute whole-campus fit for the actual viewport. Center and pitch bounds
@@ -192,7 +198,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   // Single gateway for all programmatic camera changes.
   Future<void> _moveCamera(CameraOptions camera) async {
     final map = _map, c = _geography;
-    if (map == null || c == null || !mounted) return;
+    if (map == null || c == null || !mounted || _gameOpen) return;
     final p = camera.center?.coordinates;
     final center = p == null
         ? c.center
@@ -209,7 +215,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   }
 
   void _manualCamera() {
-    if (_following && mounted) setState(() => _following = false);
+    if (!_gameOpen && _following && mounted) setState(() => _following = false);
   }
 
   Future<void> _followMe() async {
@@ -233,11 +239,17 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     } catch (_) {
       _location?.clear(CampusGpsState.unavailable);
     } finally {
-      if (mounted) setState(() => _requesting = false);
+      if (mounted) {
+        if (_location?.state != CampusGpsState.onCampus) {
+          _proximity.unavailable();
+        }
+        setState(() => _requesting = false);
+      }
     }
   }
 
   Future<void> _showOverview() async {
+    if (_gameOpen) return;
     try {
       await _viewCampus();
     } catch (_) {
@@ -277,6 +289,16 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                 ),
                 DateTime.now(),
               );
+              final gameFix = CampusFix(
+                CampusPoint(p.longitude, p.latitude),
+                p.accuracy,
+                p.timestamp,
+              );
+              _proximity.accept(
+                gameFix,
+                onCampus: _location!.state == CampusGpsState.onCampus,
+                now: DateTime.now(),
+              );
               _cowboyMotion.accept(
                 longitude: p.longitude,
                 latitude: p.latitude,
@@ -298,6 +320,9 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         final previousState = _location!.state;
         final wasWalking = _cowboyMotion.walking;
         _location!.expire(DateTime.now());
+        final previousSpot = _proximity.state;
+        _proximity.refresh(DateTime.now());
+        if (previousSpot != _proximity.state && mounted) setState(() {});
         _cowboyMotion.expire(DateTime.now());
         if (previousState != _location!.state ||
             wasWalking != _cowboyMotion.walking) {
@@ -319,6 +344,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
   Future<void> _stopGps() async {
     _locationGeneration++;
+    _proximity.unavailable();
     _cowboyMotion.stop();
     _expiry?.cancel();
     _expiry = null;
@@ -331,6 +357,12 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
   Future<void> _refreshLocation() async {
     if (!mounted) return;
+    if (_location?.state != CampusGpsState.onCampus &&
+        _location?.state != CampusGpsState.outside &&
+        _location?.state != CampusGpsState.boundary) {
+      _proximity.unavailable();
+    }
+    if (_gameOpen) return;
     if (_location?.marker == null) {
       _cowboyGround = null;
       _cowboyMotion.stop();
@@ -474,7 +506,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       _projectionGeneration++;
       _cowboyMotion.stop();
       if (mounted) setState(() => _cowboyGround = null);
-      _following = false;
+      if (!_gameOpen) _following = false;
+      _proximity.unavailable();
       _location?.clear(CampusGpsState.stale);
       unawaited(_stopGps());
     } else if (state == AppLifecycleState.resumed) {
@@ -489,6 +522,51 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       await _startGps();
     } catch (_) {
       if (mounted) setState(() => _location?.clear(CampusGpsState.unavailable));
+    }
+  }
+
+  Future<void> _openGame({bool debug = false}) async {
+    if (_gameOpen ||
+        !_foreground ||
+        !(ModalRoute.of(context)?.isCurrent ?? true)) {
+      return;
+    }
+    if (debug && !kDebugMode) return;
+    if (!debug && _location?.state != CampusGpsState.onCampus) {
+      setState(() => _proximity.unavailable());
+      return;
+    }
+    final spot = debug ? debugDemoSpot : _proximity.launch(DateTime.now());
+    if (spot == null) {
+      setState(() {});
+      return;
+    }
+    final wasFollowing = _following;
+    setState(() => _gameOpen = true);
+    try {
+      await Navigator.of(context).push<GameExit>(
+        MaterialPageRoute(
+          builder: (_) => GameHost(
+            gameId: spot.gameId,
+            session: GameSessionContext(
+              spotId: spot.id,
+              startedAt: DateTime.now(),
+              debug: debug,
+            ),
+          ),
+        ),
+      );
+    } finally {
+      _proximity.close(DateTime.now());
+      if (mounted) {
+        setState(() {
+          _gameOpen = false;
+          _following = wasFollowing;
+        });
+        // Keep the existing map, camera and follow-mode untouched on return.
+        // The next real GPS update may move the camera if follow was enabled.
+        unawaited(_renderPlayer());
+      }
     }
   }
 
@@ -571,6 +649,52 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                                 ),
                               ],
                             ),
+                    ),
+                  ),
+                ),
+              if (kDebugMode)
+                Positioned(
+                  right: 12,
+                  top: 86,
+                  child: FilledButton.tonal(
+                    onPressed: _gameOpen ? null : () => _openGame(debug: true),
+                    child: const Text('DEBUG · Game preview'),
+                  ),
+                ),
+              if (_ready &&
+                  !_gameOpen &&
+                  _proximity.state == SpotState.eligible)
+                Positioned(
+                  left: 12,
+                  right: 12,
+                  bottom: 116,
+                  child: SafeArea(
+                    child: Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(_proximity.selected!.name),
+                            const Text(
+                              'You have arrived. Stop walking before playing.',
+                            ),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                TextButton(
+                                  onPressed: () => setState(_proximity.dismiss),
+                                  child: const Text('Dismiss'),
+                                ),
+                                FilledButton(
+                                  onPressed: _openGame,
+                                  child: const Text('Play'),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
                 ),

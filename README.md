@@ -8,7 +8,7 @@ The former social-events product has been removed in place. The app is named UTR
 - Clean account screens and a custom campus-only Mapbox map with opt-in GPS.
 - No events, factions, friends, event moderation, social notifications, Bon/Sparky branding or demo XP.
 - The existing cowboy sprite atlases are registered and connected to the filtered campus GPS position. The cowboy appears only with a valid on-campus fix and hides off campus, on stale/unavailable GPS and while the app is inactive. Location remains opt-in through Follow me.
-- The cowboy uses a rendered sprite overlay with GPS-driven walking/standing; Flame gameplay and live animated 3D rendering are not integrated. Native map alignment and real campus walking remain to be reviewed on-device. See [cowboy source, runtime assets and rendering limits](docs/cowboy-player.md).
+- The cowboy uses a rendered sprite overlay with GPS-driven walking/standing; The Flame mini-game host is integrated separately; actual gameplay and live animated 3D rendering are not implemented. Native map alignment and real campus walking remain to be reviewed on-device. See [cowboy source, runtime assets and rendering limits](docs/cowboy-player.md).
 
 ## New Supabase project only
 
@@ -39,7 +39,7 @@ Without backend configuration the app shows an account-service configuration not
 
 Use the established Flutter 3.47.7 installation and Android-only dependency procedure in AGENTS.md. Run flutter analyze --no-pub and flutter test --no-pub after changes.
 
-The campus map now uses local campus-clipped OSM geometry, an opaque background and simplified raised buildings, a fixed 45-degree camera, whole-campus fit, native pan/zoom bounds and Follow me / View campus controls. Foreground GPS is filtered for campus membership, accuracy, age and boundary uncertainty. See [campus-map implementation and review limits](docs/campus-map.md) for editable extent, sources/licenses, approximate heights, data gaps and reproducible checks. Native visual review and actual on-campus GPS are still pending; no install or deployment is part of this map update. Flame and cowboy work remain separate.
+The campus map now uses local campus-clipped OSM geometry, an opaque background and simplified raised buildings, a fixed 45-degree camera, whole-campus fit, native pan/zoom bounds and Follow me / View campus controls. Foreground GPS is filtered for campus membership, accuracy, age and boundary uncertainty. See [campus-map implementation and review limits](docs/campus-map.md) for editable extent, sources/licenses, approximate heights, data gaps and reproducible checks. Native visual review and actual on-campus GPS are still pending; no install or deployment is part of this map update. The separate Flame preview host and GPS arrival foundation are documented in [mini-game foundation](docs/flame-games.md).
 
 Android/iOS platform identifiers/signing were not changed. Android release still uses debug signing; iOS's original team ownership must be verified before release. Do not install, deploy or upload without the appropriate task authorization. Project Git restrictions remain in AGENTS.md.
 

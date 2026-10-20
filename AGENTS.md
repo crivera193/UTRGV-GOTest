@@ -6,7 +6,7 @@ Maintained October 12, 2026. This folder is the new senior college project using
 
 - Owner has left the original team. This is now an independent campus exploration game, not a social-events app. This section supersedes older product/backend/role/faction instructions below.
 - Owner declined a backup copy. Cleanup is in place; no new folder or backup was created. Preserve unrelated source art, accepted cowboy corrections and authored evidence. Do not resurrect removed event features.
-- Keep Flutter Android/iOS, accounts, Mapbox/location and cowboy source assets. Flame is the intended game layer but is not installed yet. First playable milestone is walking around UTRGV Edinburg as the cowboy. Do not claim the renderer/animation integration is complete.
+- Keep Flutter Android/iOS, accounts, Mapbox/location and cowboy source assets. Flame 1.38.2 supplies the separate preview mini-game host; actual mini-game design remains future work (see docs/flame-games.md). First playable milestone is walking around UTRGV Edinburg as the cowboy. Do not claim the renderer/animation integration is complete.
 - Remove Sparks/events, participation, moderation, social notifications, friends, factions, Bon/Sparky branding and demo progression from the running app.
 - Use a NEW Supabase project with no former-team data or configuration fallback. Never apply the new independent-account migration to the previous project. Do not run retired seed scripts.
 - All valid email domains ending exactly in .edu are allowed (not only utrgv.edu). Owner explicitly requires no email verification for this project. Allow immediate signup/sign-in with a .edu address; disable Supabase Confirm email when configuring the new backend. Enforce policy in the database as well as Flutter.

@@ -1,6 +1,8 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'games/game_host.dart';
 import 'auth/auth_gate.dart';
 import 'config/app_configuration.dart';
 import 'widgets/mapbox_configuration_notice.dart';
@@ -34,12 +36,15 @@ class CampusApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) => MaterialApp(
     title: 'UTRGV-GO',
+    navigatorObservers: [gameRouteObserver],
     debugShowCheckedModeBanner: false,
     theme: ThemeData(
       useMaterial3: true,
       colorSchemeSeed: const Color(0xFF795548),
     ),
-    home: !AppConfiguration.hasBackend
+    home: kDebugMode && const bool.fromEnvironment('GAME_PREVIEW')
+        ? const DebugPreviewLauncher()
+        : !AppConfiguration.hasBackend
         ? const Scaffold(
             body: Center(
               child: Padding(
