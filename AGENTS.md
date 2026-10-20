@@ -15,6 +15,7 @@ Maintained October 12, 2026. This folder is the new senior college project using
 - Owner selected UTRGV-GO as the app display name on October 19, 2026. Package identifiers remain unchanged; verify original signing/team ownership before a release.
 - Owner authorizes GitHub sign-in and repository access ONLY as crivera193 for https://github.com/crivera193/UTRGV-GO.git. Never use Nayster/TheNayster credentials, connected GitHub tools, or commit identity for this project. Verify the authenticated account before repository access. Owner has now explicitly authorized committing and pushing this independent project, and creating main plus feature branches. The former no-push restriction is revoked; the account restriction remains permanent.
 - README.md tracks the independent foundation and remaining backend/map/game verification. Historical workflow/asset records below are evidence, not the current product specification.
+- Campus-map implementation, October 19: assets/campus/boundary.geojson is the single editable display extent; docs/campus-map.md records OSM/ODbL provenance, approximate heights, northern/western athletics coverage and native review limits. Use the local complete style without Standard/basemap imports; camera bounds alone do not hide city content. The owner limited this pass to source/build checks: no input automation, installation or live deployment. Do not claim native captures, real GPS or visual acceptance from these checks.
 
 ## Current scope and authority
 

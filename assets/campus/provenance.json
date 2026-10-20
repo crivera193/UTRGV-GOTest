@@ -1,0 +1,18 @@
+{
+  "source": "https://api.openstreetmap.org/api/0.6/map?bbox=-98.188,26.297,-98.160,26.319",
+  "retrieved_utc": "2026-10-20T04:05:27.188040+00:00",
+  "source_sha256": "899f05d0ac8261c836612778877f0672c23386f5ea6bef147270930a05164b7b",
+  "counts": {
+    "parking": 43,
+    "sport": 21,
+    "building": 93,
+    "path": 666,
+    "road": 278,
+    "water": 6,
+    "green": 2
+  },
+  "height_basis": {
+    "display_default_9m": 82,
+    "osm_levels_x_3.5m": 11
+  }
+}

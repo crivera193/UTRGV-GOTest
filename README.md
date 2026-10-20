@@ -5,10 +5,10 @@ The former social-events product has been removed in place. The app is named UTR
 ## Current scope
 
 - Email/password accounts restricted to .edu addresses, without email verification (all .edu domains, not only UTRGV).
-- Clean account screens and campus Mapbox screen with opt-in location display.
+- Clean account screens and a custom campus-only Mapbox map with opt-in GPS.
 - No events, factions, friends, event moderation, social notifications, Bon/Sparky branding or demo XP.
 - Cowboy authoring source and neutral campus geographic data are retained. They are not yet registered runtime assets.
-- Flame/gameplay and animated 3D character rendering are not integrated. The map still uses the native default location indicator when location is enabled.
+- Flame/gameplay and animated 3D character rendering are not integrated in the campus-map slice. It uses a filtered orange player marker.
 
 ## New Supabase project only
 
@@ -39,7 +39,7 @@ Without backend configuration the app shows an account-service configuration not
 
 Use the established Flutter 3.47.7 installation and Android-only dependency procedure in AGENTS.md. Run flutter analyze --no-pub and flutter test --no-pub after changes.
 
-The campus center remains a point-based initial camera, not a verified whole-campus fit. Complete boundary verification, campus camera constraints, GPS filtering, Flame integration, optimized cowboy export and animated map rendering remain necessary before claiming a playable walking experience. Do not add new gameplay features before proving that representative slice.
+The campus map now uses local campus-clipped OSM geometry, an opaque background and simplified raised buildings, a fixed 45-degree camera, whole-campus fit, native pan/zoom bounds and Follow me / View campus controls. Foreground GPS is filtered for campus membership, accuracy, age and boundary uncertainty. See [campus-map implementation and review limits](docs/campus-map.md) for editable extent, sources/licenses, approximate heights, data gaps and reproducible checks. Native visual review and actual on-campus GPS are still pending; no install or deployment is part of this map update. Flame and cowboy work remain separate.
 
 Android/iOS platform identifiers/signing were not changed. Android release still uses debug signing; iOS's original team ownership must be verified before release. Do not install, deploy or upload without the appropriate task authorization. Project Git restrictions remain in AGENTS.md.
 

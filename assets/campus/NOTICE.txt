@@ -1,0 +1,13 @@
+Campus geographic database: (c) OpenStreetMap contributors, ODbL 1.0.
+https://www.openstreetmap.org/copyright
+https://opendatacommons.org/licenses/odbl/1-0/
+
+boundary.geojson and features.geojson are an adapted geographic database under
+ODbL 1.0, including this project's display-boundary extensions, clipped geometry
+and display-height properties. Source object IDs/versions are retained.
+The data is supplied without a warranty of completeness or survey accuracy.
+This notice applies to geographic data, not to the application's source code.
+
+UTRGV's official PDF was used to identify campus facility coverage only. No
+PDF artwork, logos, Mapbox tiles or third-party satellite imagery were copied.
+See docs/campus-map.md for sources, assumptions and regeneration instructions.
