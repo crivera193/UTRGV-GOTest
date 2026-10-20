@@ -33,7 +33,7 @@ class CampusApp extends StatelessWidget {
   final String? startupError;
   @override
   Widget build(BuildContext context) => MaterialApp(
-    title: 'Campus Explorer',
+    title: 'UTRGV-GO',
     debugShowCheckedModeBanner: false,
     theme: ThemeData(
       useMaterial3: true,

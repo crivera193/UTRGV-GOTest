@@ -1,6 +1,6 @@
 # Independent campus exploration foundation
 
-The former social-events product has been removed in place. Campus Explorer is a temporary label. Flutter Android/iOS infrastructure remains; the next playable slice is the cowboy walking around UTRGV Edinburg using real location updates.
+The former social-events product has been removed in place. The app is named UTRGV-GO. Flutter Android/iOS infrastructure remains; the next playable slice is the cowboy walking around UTRGV Edinburg using real location updates.
 
 ## Current scope
 
