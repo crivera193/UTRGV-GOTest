@@ -62,3 +62,32 @@ linux/flutter/ephemeral/
 # Local VS Code settings
 .vscode/
 supabase/.temp/
+
+# Local character authoring workspace: dense meshes, Blender checkpoints,
+# generated textures/renders and historical experiments. Runtime game exports
+# belong under assets/ and must be reviewed and added deliberately.
+/SourceArt/
+/assets/character-references/
+
+# Local character-authoring adapters (not Flutter/Flame application tooling).
+/tool/mascot_*.py
+/tool/human_cowboy_*.py
+/tool/cowboy_*.py
+
+# Reproducible dependency/cache/output folders.
+node_modules/
+__pycache__/
+.pytest_cache/
+.venv/
+/tmp/
+/output/
+
+# Local signing/export material and packaged app outputs.
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.mobileprovision
+*.apk
+*.aab
+*.ipa
