@@ -14,18 +14,21 @@ The former social-events product has been removed in place. Campus Explorer is a
 
 The former backend URL/key and event migrations were removed. No remote database was modified. No previous accounts or sessions are migrated; the client uses an independent session-storage namespace.
 
-1. Create the owner's new Supabase project. Apply supabase/migrations/20261020000000_independent_accounts.sql ONLY to that new project. It rejects non-.edu Auth email creation/changes, creates private player profiles, and restricts profile reads to the owning .edu account.
-2. Enable email/password signup and DISABLE Confirm email so signup returns a session immediately. No email verification is required for this project. Require passwords of at least eight characters; disable anonymous, phone and social-provider signups for this initial scope.
-3. No email confirmation landing page or verification deep-link flow is needed.
-4. Supply SUPABASE_URL and SUPABASE_PUBLISHABLE_KEY as Dart defines. Never provide secret/service-role keys. Supply ACCESS_TOKEN for the owner's Mapbox project separately.
-5. Check that .edu signup enters the app immediately without an email link. Check rejection of non-.edu requests through the Auth API and profile isolation between accounts. These backend checks have NOT been executed without the new project.
+Configured on October 19, 2026 in the new UTRGV-GO project (oipidltfvzodpiumdsaq), SeniorProjectUTRGV free organization, signed in as crivera193. Region: West US (Oregon). No paid upgrade or former-team backend access.
 
-The SQL is unapplied and not runtime-verified. Existing migration history from the former backend must not be replayed here. New game tables must use equivalent authenticated .edu-user authorization. This project checks the email suffix only; it does not verify mailbox ownership or enrollment.
+- Email/password signup enabled; Confirm email OFF; minimum password length 8. Anonymous, phone and social-provider signups disabled.
+- independent_accounts.sql applied through the dashboard SQL editor. It rejects non-.edu Auth email creation/changes, creates private player profiles and permits only the owner's .edu account to read its profile. Automatic RLS enabled at project creation; automatic broad grants disabled.
+- SQL transactional checks passed for .edu eligibility, non-.edu rejection, profile creation and account isolation; synthetic test records were rolled back.
+- Public Auth settings endpoint reachable; mailer_autoconfirm=true. Direct non-.edu Auth signup rejected with HTTP 500 / P0001 from the database trigger. Flutter provides a friendly .edu validation message before making this request.
+- Local .env.app.local.json contains SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY and the existing ACCESS_TOKEN. It is ignored by Git. No database password or secret/service-role key is needed in the app.
+- No permanent test account was created. Actual end-to-end signup/sign-in with the owner's chosen .edu account remains to be exercised by the owner.
+
+The initial migration is already applied manually to this project; do not replay it or the old team's migrations. New game tables must use equivalent authenticated .edu-user authorization. The project checks the email suffix only, not mailbox ownership or enrollment.
 
 Example build configuration (placeholders only):
 
 ```powershell
-flutter run --dart-define=SUPABASE_URL=https://NEW_PROJECT.supabase.co --dart-define=SUPABASE_PUBLISHABLE_KEY=NEW_PUBLISHABLE_KEY --dart-define=ACCESS_TOKEN=YOUR_MAPBOX_PUBLIC_TOKEN
+flutter run --dart-define-from-file=.env.app.local.json
 ```
 
 The owner-supplied public Mapbox token is saved in .env.mapbox.local.json (ignored by Git). A read-only request to the Standard style returned HTTP 200. Include --dart-define-from-file=.env.mapbox.local.json when running/building locally; do not print the token or add the file to version control. This validates the token, not live native rendering.
