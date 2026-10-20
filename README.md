@@ -53,3 +53,9 @@ Private repository: https://github.com/crivera193/UTRGV-GO . Use crivera193 only
 - codex/flame-gameplay: Flame game layer and gameplay systems.
 
 The baseline retains Git ancestry from the original source. Local SourceArt (approximately 26 GB), character references and character-authoring adapters are explicitly ignored by Git and remain on disk; no bulk source-art upload or deletion was performed. Runtime mascot assets under assets/ and new application tooling remain trackable and will be added after mobile preparation. Dependency caches, temporary outputs, .env files, signing material and packaged app builds are ignored too. Do not use broad model/image/source-extension ignores that would hide actual runtime assets or application code.
+
+### Connected Android preview — October 19, 2026
+
+Built current source with .env.app.local.json and installed the fresh app-x86_64-debug.apk on the dedicated UTRGV_GO_Preview emulator (emulator-5556, API 36.1). Visually confirmed the .edu login/create-account screen, replacing the missing-backend notice. No account was created and the authenticated map has not yet been reviewed.
+
+The original Medium_Phone emulator had insufficient internal storage; Android cache trimming did not free space. Its app was not uninstalled or data-cleared. A separate fresh preview AVD was created instead. Source build command: flutter build apk --debug --no-pub --split-per-abi --target-platform android-x64 --dart-define-from-file=.env.app.local.json . The same source remains configured for Android/iOS; this artifact is specifically for the x86_64 emulator.
