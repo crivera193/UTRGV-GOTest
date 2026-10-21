@@ -1,23 +1,33 @@
-"""Run in background Blender: render the accepted cowboy, never save its master.
+"""Render the approved cowboy with the owner-selected flat-cartoon materials.
 
 blender -b -t 6 --python tool/export_player_sprites.py
 Then: python tool/pack_player_sprites.py
-Partial outputs resume only when their source hash/settings match.
+Use -- --source <absolute .blend> in an isolated checkout without SourceArt.
+Partial outputs resume only when source, style-script hash and settings match.
 """
 import bpy
 import hashlib
 import json
 import math
+import argparse
+import sys
 from pathlib import Path
 from mathutils import Vector
 from bpy_extras.object_utils import world_to_camera_view
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT / 'SourceArt/human-cowboy/v008-hands-paint-repair/Cowboy_Hands_and_Paint_Repair.blend'
-OUT = ROOT / 'tmp/avatar/frames-v2'
+sys.path.insert(0, str(ROOT / 'tool'))
+from flat_cartoon_materials import STYLE, apply_flat_cartoon
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--source', type=Path, default=ROOT / 'SourceArt/human-cowboy/v008-hands-paint-repair/Cowboy_Hands_and_Paint_Repair.blend')
+args = parser.parse_args(sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else [])
+SOURCE = args.source.resolve()
+OUT = ROOT / 'tmp/avatar-flat-v1/frames'
 OUT.mkdir(parents=True, exist_ok=True)
 source_hash = hashlib.sha256(SOURCE.read_bytes()).hexdigest()
 bpy.ops.wm.open_mainfile(filepath=str(SOURCE))
+apply_flat_cartoon()
 s = bpy.context.scene
 rig = bpy.data.objects['Meeps_Cowboy_Rig']
 assert rig.animation_data.action.name == 'Cowboy_Relaxed_Walk'
@@ -28,8 +38,10 @@ preview.location = (0, 0, 0)
 rig.data.pose_position = 'POSE'
 bpy.data.objects['Review_Ground_Do_Not_Export'].hide_render = True
 s.render.engine = 'CYCLES'
-s.cycles.samples = 8
+s.cycles.samples = 16
 s.cycles.use_denoising = True
+s.render.use_persistent_data = True
+s.view_settings.view_transform = 'Standard'
 s.render.resolution_x = 160
 s.render.resolution_y = 192
 s.render.resolution_percentage = 100
@@ -47,8 +59,11 @@ settings = dict(source_sha256=source_hash, action=rig.animation_data.action.name
                 pitches=[0, 30, 50], duration_seconds=40/30,
                 speed_mps=float(rig.get('matched_travel_m_per_second', 1.2)),
                 in_place=True, idle='existing walk frame 11, neutral rest lower body',
-                source=str(SOURCE.relative_to(ROOT)), version=2)
-record = OUT.parent / 'render-settings-v2.json'
+                source='SourceArt/human-cowboy/v008-hands-paint-repair/Cowboy_Hands_and_Paint_Repair.blend',
+                style=STYLE, samples=16,
+                style_script_sha256=hashlib.sha256((ROOT / 'tool/flat_cartoon_materials.py').read_bytes()).hexdigest(),
+                version=3)
+record = OUT.parent / 'render-settings.json'
 if record.exists():
     assert json.loads(record.read_text()) == settings, 'Export settings changed; use a new output directory'
 record.write_text(json.dumps(settings, indent=2))

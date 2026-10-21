@@ -14,8 +14,11 @@
   "speed_mps": 1.0645109415054321,
   "in_place": true,
   "idle": "existing walk frame 11, neutral rest lower body",
-  "source": "SourceArt\\human-cowboy\\v008-hands-paint-repair\\Cowboy_Hands_and_Paint_Repair.blend",
-  "version": 2,
+  "source": "SourceArt/human-cowboy/v008-hands-paint-repair/Cowboy_Hands_and_Paint_Repair.blend",
+  "style": "flat-cartoon-v1",
+  "samples": 16,
+  "style_script_sha256": "209beebd57d31a009ce6ed4cbaa6900720897e5b8fc8ddd55c459f1a1b72b87c",
+  "version": 3,
   "anchors": [
     [
       0.5,

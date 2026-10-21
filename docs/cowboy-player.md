@@ -3,6 +3,61 @@
 The owner chose rendered animated sprites after reviewing the separate-renderer
 camera/depth tradeoff. No new rendering package or Flame installation is needed.
 
+## Flat-cartoon style — October 21, 2026
+
+Owner selected preview **C / Flat cartoon** and requested the runtime update.
+`tool/flat_cartoon_materials.py` reproduces that preview in the background render
+worker: in-memory 128-pixel texture reduction, the same eight-color palette,
+diffuse Toon BSDF (size 0.55, smooth 0.03) and 70% unlit color contribution.
+Standard color management and 16 Cycles samples match the selected preview.
+The original packed images and materials remain unchanged in the master file;
+the worker never saves it. No mesh, UV, rig, head/neck animation or walk changes
+are included. The original detailed source remains the authoring baseline.
+
+The three runtime atlases retain 160 × 192 tiles, eight headings, twelve walk
+frames plus standing, original foot anchors and the 1.333-second walk. This
+changes appearance without changing Flutter rendering or GPS/gameplay logic.
+It does not claim a runtime-memory or frame-rate improvement.
+
+Regenerate with Blender 5.2:
+
+```powershell
+blender -b -t 6 --python tool/export_player_sprites.py
+python tool/pack_player_sprites.py
+```
+
+In an isolated checkout without local SourceArt, append
+`-- --source <absolute-master.blend>` to the Blender command and
+`--source <absolute-master.blend>` to the packer. Intermediate frames and settings
+are in ignored `tmp/avatar-flat-v1/`. Source and style-script SHA-256 hashes guard
+resume; the runtime manifest records the style and unchanged source hash.
+
+Validation: all 312 transparent frames passed atlas bounds checks; each direction
+contains twelve distinct walk frames. Manifest comparison confirmed unchanged
+source hash, action, timing, dimensions, heading count and foot anchors. Original
+master SHA-256 remains `1a7e08d815a983849c150ee1a70d1948fb4e7a7e98ed002d27cfca7c8254e97c`.
+Flutter analysis and all 11 focused cowboy tests passed on this feature checkout.
+
+The native preview uses a build-only snapshot of the shared campus workspace at
+`tmp/flat-cartoon-build`, overlaid with these four runtime asset files. This
+includes the ongoing map/cowboy/creature changes without committing or modifying
+their original source. Snapshot analysis and all 54 tests passed. Built with
+Flutter 3.47.7, `--debug --split-per-abi --target-platform android-x64
+--build-number=8008 --dart-define-from-file=.env.app.local.json`; secrets remain
+ignored. All packaged cowboy assets matched the source bytes.
+
+Installed in place on `UTRGV_GO_Preview`, emulator-5554, API 36.1, 1080 × 2400,
+as `com.example.campus_app` 1.0.0 (12008). Signing SHA-256 matched the existing
+installation; the signed-in session remained. Observed the flat-cartoon avatar
+and walking poses on the native map using simulated GPS, including approach to
+Kitty Island. This is not an outdoor GPS or iOS test. The selected preview C was
+approved by the owner before this update; no additional design changes were made.
+
+[Native flat-cartoon preview](evidence/cowboy-flat-cartoon.png).
+The local walk recording and build/source records are retained under ignored
+`output/cowboy-flat-cartoon/`. APK SHA-256:
+`7456ac492ff512114e355ae8e47250842c3a2c96e460a47c8a9fecbb020c8f61`.
+
 ## Authoritative source
 
 `SourceArt/human-cowboy/v008-hands-paint-repair/Cowboy_Hands_and_Paint_Repair.blend`
@@ -22,8 +77,9 @@ Each atlas contains eight headings, twelve walk frames and a standing view.
 The walk is sampled evenly from its existing 40-frame/30fps loop (1.333 seconds;
 nine exported sprite frames per second at normal playback).
 Standing holds the existing relaxed arms with neutral rest lower-body transforms
-on the export copy. Hat, body, gloves, accessories, materials and proportions are
-rendered directly; no character generation or replacement rig is involved.
+on the export copy. Hat, body, gloves, accessories and proportions are retained;
+no character generation or replacement rig is involved. The October 21
+flat-cartoon update below changes only the render-worker materials.
 
 The source's separate `Matched_Travel_Preview` driver is disabled in the worker.
 The walk stays in place. GPS alone supplies geographic displacement; sprite
