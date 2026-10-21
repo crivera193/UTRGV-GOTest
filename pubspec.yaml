@@ -42,6 +42,7 @@ dependencies:
   url_launcher: ^6.3.1
   flame: 1.38.2
   shared_preferences: 2.5.6
+  lottie: 3.6.1
 
 dev_dependencies:
   flutter_test:
@@ -68,6 +69,7 @@ flutter:
     - assets/campus/
     - assets/player/cowboy/
     - assets/auth/
+    - assets/animations/kitty-island/
   fonts:
     - family: Inter
       fonts:

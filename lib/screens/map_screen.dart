@@ -15,6 +15,8 @@ import '../games/game_spot.dart';
 import '../games/spot_proximity.dart';
 import '../map/campus_geography.dart';
 import '../map/campus_location.dart';
+import '../map/kitty_island.dart';
+import '../widgets/kitty_island_cats.dart';
 import '../map/campus_style.dart';
 import '../map/campus_presentation.dart';
 import '../map/campus_zoom_controls.dart';
@@ -59,6 +61,9 @@ class _MapScreenState extends State<MapScreen>
   CampusPoint? _lastFollowCenter;
   bool _foreground = true;
   final _proximity = SpotProximity(configuredGameSpots);
+  final _kittyProximity = KittyIslandProximity();
+  final _kittyPlacement = ValueNotifier<List<Offset>?>(null);
+  late final LatestProjection<List<Offset>> _kittyProjector;
   bool _gameOpen = false, _chapelCardOpen = false;
   final _chapel = ChapelPoint(LocalPointPersistence());
   final _chapelPlacement = ValueNotifier<Offset?>(null);
@@ -69,6 +74,28 @@ class _MapScreenState extends State<MapScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _kittyProjector = LatestProjection<List<Offset>>(
+      read: () async {
+        final map = _map;
+        if (map == null ||
+            !_styleLoaded ||
+            !_foreground ||
+            !_kittyProximity.visible ||
+            _gameOpen) {
+          return null;
+        }
+        final positions = <Offset>[];
+        for (final point in KittyIsland.cats) {
+          final pixel = await map.pixelForCoordinate(_point(point));
+          if (!pixel.x.isFinite || !pixel.y.isFinite) return null;
+          positions.add(Offset(pixel.x, pixel.y));
+        }
+        return positions;
+      },
+      apply: (value) {
+        if (mounted) _kittyPlacement.value = value;
+      },
+    );
     _chapelProjector = LatestProjection<Offset>(
       read: () async {
         if (_map == null || !_styleLoaded || !_foreground) return null;
@@ -312,6 +339,7 @@ class _MapScreenState extends State<MapScreen>
 
   void _cameraChanged(CameraChangedEventData event) {
     _cameraState = event.cameraState;
+    _syncKittyCats();
     unawaited(_chapelProjector.request(invalidate: true));
     if (_hasFitted && !_fitting) {
       _cameraSession.rememberZoom(event.cameraState.zoom);
@@ -397,6 +425,12 @@ class _MapScreenState extends State<MapScreen>
                 p.accuracy,
                 p.timestamp,
               );
+              _kittyProximity.accept(
+                gameFix,
+                onCampus: _location!.state == CampusGpsState.onCampus,
+                now: DateTime.now(),
+              );
+              _syncKittyCats();
               _proximity.accept(
                 gameFix,
                 onCampus: _location!.state == CampusGpsState.onCampus,
@@ -446,6 +480,8 @@ class _MapScreenState extends State<MapScreen>
         final previousState = _location!.state;
         final wasWalking = _cowboyMotion.walking;
         _location!.expire(DateTime.now());
+        _kittyProximity.refresh(DateTime.now());
+        _syncKittyCats();
         final previousSpot = _proximity.state;
         _proximity.refresh(DateTime.now());
         if (previousSpot != _proximity.state && mounted) setState(() {});
@@ -470,6 +506,9 @@ class _MapScreenState extends State<MapScreen>
 
   Future<void> _stopGps() async {
     _locationGeneration++;
+    _kittyProximity.unavailable();
+    _kittyProjector.cancel();
+    _kittyPlacement.value = null;
     _proximity.unavailable();
     _cowboyMotion.stop();
     _clearTravel();
@@ -484,6 +523,10 @@ class _MapScreenState extends State<MapScreen>
 
   Future<void> _refreshLocation() async {
     if (!mounted) return;
+    if (_location?.state != CampusGpsState.onCampus) {
+      _kittyProximity.unavailable();
+    }
+    _syncKittyCats();
     if (_location?.state != CampusGpsState.onCampus &&
         _location?.state != CampusGpsState.outside &&
         _location?.state != CampusGpsState.boundary) {
@@ -821,7 +864,22 @@ class _MapScreenState extends State<MapScreen>
     _cowboyPlacement.dispose();
     _chapelProjector.dispose();
     _chapelPlacement.dispose();
+    _kittyProjector.dispose();
+    _kittyPlacement.dispose();
     super.dispose();
+  }
+
+  void _syncKittyCats() {
+    if (!_foreground ||
+        !_kittyProximity.visible ||
+        _gameOpen ||
+        !_ready ||
+        _error != null) {
+      _kittyProjector.cancel();
+      _kittyPlacement.value = null;
+      return;
+    }
+    unawaited(_kittyProjector.request(invalidate: true));
   }
 
   @override
@@ -902,6 +960,19 @@ class _MapScreenState extends State<MapScreen>
                     ),
                   ),
                 ),
+              Positioned.fill(
+                child: ValueListenableBuilder<List<Offset>?>(
+                  valueListenable: _kittyPlacement,
+                  builder: (context, positions, child) =>
+                      positions == null ||
+                          !_ready ||
+                          _error != null ||
+                          !_foreground ||
+                          _gameOpen
+                      ? const SizedBox.shrink()
+                      : KittyIslandCats(positions: positions),
+                ),
+              ),
               if (kDebugMode)
                 Positioned(
                   right: 12,
