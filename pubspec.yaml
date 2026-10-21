@@ -70,6 +70,7 @@ flutter:
     - assets/player/cowboy/
     - assets/auth/
     - assets/animations/kitty-island/
+    - assets/animations/campus-creatures/
   fonts:
     - family: Inter
       fonts:

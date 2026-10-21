@@ -1,0 +1,24 @@
+{
+  "source_name": "dragon-background-removed.json",
+  "source_sha256": "2e6f7f8b02a44813ee48a869abe7d0e8a267d0cbd32bed7799f4345d2b669a4d",
+  "source_canvas": [
+    1200,
+    600
+  ],
+  "shared_crop": [
+    484,
+    0,
+    716,
+    504
+  ],
+  "runtime_canvas": [
+    540,
+    380
+  ],
+  "frames": 150,
+  "fps": 30,
+  "duration_seconds": 5,
+  "loop": true,
+  "dragon_motion": "Original frames; no Blender reconstruction or generated body",
+  "license": "Owner supplied; distribution rights not supplied"
+}
