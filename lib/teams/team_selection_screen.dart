@@ -189,7 +189,7 @@ class _TeamSelectionScreenState extends State<TeamSelectionScreen>
                             ),
                             const SizedBox(height: 14),
                             const Text(
-                              'Three paths. One campus.\nTap a hat or pillar to discover your team.',
+                              'Three paths. One campus.\nTap a floating hat to discover your team.',
                               textAlign: TextAlign.center,
                               style: TextStyle(
                                 color: _muted,

@@ -3,6 +3,12 @@
 Implemented on `codex/team-onboarding`; **owner visual review pending**. No main
 integration until review. Existing map/cowboy/chapel source is retained.
 
+Owner revision: removed the three pillars from the scene. The original shared
+hat sprites now float above the colored lights; hat positions, selection controls
+and permanent-membership behavior are unchanged. The pedestal export is retained
+as historical asset material but is no longer loaded or rendered. Updated widget
+captures were inspected; analysis and all eight onboarding widget tests passed.
+
 ## Experience and code
 
 After a real Supabase session is established, `AuthGate` mounts an account-keyed
@@ -151,3 +157,5 @@ References read: [Supabase RLS](https://supabase.com/docs/guides/database/postgr
 and [FlameGame](https://docs.flame-engine.org/latest/flame/game.html). The Flame
 guide identifies itself as older documentation; lifecycle, asset loading,
 disposal and GameWidget behavior were checked against installed 1.38.2 source.
+
+Floating-hat revision preview: installed version code **16016** on the same AVD with matching signing, retained session and byte-for-byte APK verification (SHA-256 e5ec2197d5c3369cdb7df5ce3aafbb8696880656e1f114c2087f7a9e896cf419). Native capture updated; no team was selected.

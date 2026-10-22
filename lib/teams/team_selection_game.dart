@@ -14,7 +14,7 @@ class TeamSelectionGame extends FlameGame {
         false; // The Flutter host combines app/dialog visibility.
   }
   final VoidCallback? onAssetError;
-  ui.Image? _hat, _pedestal;
+  ui.Image? _hat;
   double _time = 0;
   bool reducedMotion = false;
 
@@ -22,7 +22,6 @@ class TeamSelectionGame extends FlameGame {
   Future<void> onLoad() async {
     try {
       _hat = await images.load('cowboy-hat.png');
-      _pedestal = await images.load('pedestal.png');
     } catch (_) {
       onAssetError?.call();
       rethrow;
@@ -114,25 +113,6 @@ class TeamSelectionGame extends FlameGame {
           ..color = Colors.black.withValues(alpha: .45)
           ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
       );
-      if (_pedestal case final pedestal?) {
-        final target = Rect.fromLTWH(
-          x - w * .15,
-          base - h * .55,
-          w * .3,
-          h * .55,
-        );
-        canvas.drawImageRect(
-          pedestal,
-          Rect.fromLTWH(
-            0,
-            0,
-            pedestal.width.toDouble(),
-            pedestal.height.toDouble(),
-          ),
-          target,
-          Paint()..filterQuality = FilterQuality.medium,
-        );
-      }
       final bob = reducedMotion ? 0.0 : math.sin(_time * 1.2 + i) * h * .006;
       if (_hat case final hat?) {
         final target = Rect.fromLTWH(

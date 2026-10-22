@@ -72,7 +72,7 @@ void main() {
   }
 
   testWidgets(
-    'all pillars show info; cancel and system back never save or bypass',
+    'all hats show info; cancel and system back never save or bypass',
     (tester) async {
       final repo = MemoryTeams();
       await open(tester, repo);
