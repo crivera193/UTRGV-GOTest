@@ -1,0 +1,1101 @@
+{
+  "sources": [
+    "Existing campus footprint/directory data",
+    "https://www.utrgv.edu/campus-operations/departments/campus-facilities-operations/building/index.htm"
+  ],
+  "source_osm_sha256": "899f05d0ac8261c836612778877f0672c23386f5ea6bef147270930a05164b7b",
+  "labels": [
+    {
+      "id": "relation/9960882#0",
+      "osm_id": "relation/9960882",
+      "part": 0,
+      "short": "UNTY",
+      "code": "EUNTY",
+      "name": "Unity Hall",
+      "verified_name": true,
+      "center": [
+        -98.17839836,
+        26.30753893
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "relation/9960882#1",
+      "osm_id": "relation/9960882",
+      "part": 1,
+      "short": "UNTY",
+      "code": "EUNTY",
+      "name": "Unity Hall",
+      "verified_name": true,
+      "center": [
+        -98.17807294,
+        26.30778866
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "relation/9960882#2",
+      "osm_id": "relation/9960882",
+      "part": 2,
+      "short": "UNTY",
+      "code": "EUNTY",
+      "name": "Unity Hall",
+      "verified_name": true,
+      "center": [
+        -98.17828905,
+        26.3081457
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "relation/9960882#3",
+      "osm_id": "relation/9960882",
+      "part": 3,
+      "short": "UNTY",
+      "code": "EUNTY",
+      "name": "Unity Hall",
+      "verified_name": true,
+      "center": [
+        -98.1786459,
+        26.3082509
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "relation/14990810#0",
+      "osm_id": "relation/14990810",
+      "part": 0,
+      "short": "HPE1",
+      "code": "EHPE1",
+      "name": "Health & Physical Education Complex Fieldhouse",
+      "verified_name": true,
+      "center": [
+        -98.16985323,
+        26.30679612
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "relation/15022052#0",
+      "osm_id": "relation/15022052",
+      "part": 0,
+      "short": "EDU",
+      "code": "EEDUC",
+      "name": "Education Complex",
+      "verified_name": true,
+      "center": [
+        -98.17137846,
+        26.30805233
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "relation/15022053#0",
+      "osm_id": "relation/15022053",
+      "part": 0,
+      "short": "SCI",
+      "code": "ESCNE",
+      "name": "Science",
+      "verified_name": true,
+      "center": [
+        -98.17220768,
+        26.30634486
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "way/51323387#0",
+      "osm_id": "way/51323387",
+      "part": 0,
+      "short": "SWOT",
+      "code": "ESWOT",
+      "name": "Social Work and Occupational Therapy",
+      "verified_name": true,
+      "center": [
+        -98.16946621,
+        26.30304392
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "way/51323392#0",
+      "osm_id": "way/51323392",
+      "part": 0,
+      "short": "THER",
+      "code": "ETHER",
+      "name": "Thermal Storage Tank",
+      "verified_name": true,
+      "center": [
+        -98.17371994,
+        26.30858735
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "way/51323416#0",
+      "osm_id": "way/51323416",
+      "part": 0,
+      "short": "REBL",
+      "code": "EREBL",
+      "name": "UTPA Regional Academic Health Center",
+      "verified_name": true,
+      "center": [
+        -98.17517441,
+        26.30913272
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "way/51323425#0",
+      "osm_id": "way/51323425",
+      "part": 0,
+      "short": "ASFC",
+      "code": "EASFC",
+      "name": "Rio Grande Center for Manufacturing",
+      "verified_name": true,
+      "center": [
+        -98.17978791,
+        26.30857755
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "way/51323429#0",
+      "osm_id": "way/51323429",
+      "part": 0,
+      "short": "ROTC",
+      "code": "EROTC",
+      "name": "Auditors / Office of the Chief Information Security Officer",
+      "verified_name": true,
+      "center": [
+        -98.174305,
+        26.31056743
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "way/51324156#0",
+      "osm_id": "way/51324156",
+      "part": 0,
+      "short": "CDCR",
+      "code": "ECDCR",
+      "name": "Child Development Center",
+      "verified_name": true,
+      "center": [
+        -98.16955128,
+        26.30820116
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "way/51324159#0",
+      "osm_id": "way/51324159",
+      "part": 0,
+      "short": "COBE",
+      "code": "ECOBE",
+      "name": "Robert C. Vackar College of Business and Entrepreneurship",
+      "verified_name": true,
+      "center": [
+        -98.17352743,
+        26.30760446
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "way/51324160#0",
+      "osm_id": "way/51324160",
+      "part": 0,
+      "short": "CCTR",
+      "code": "ECCTR",
+      "name": "Computer Center",
+      "verified_name": true,
+      "center": [
+        -98.17294388,
+        26.30803157
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "way/51324161#0",
+      "osm_id": "way/51324161",
+      "part": 0,
+      "short": "MAGC",
+      "code": "EMAGC",
+      "name": "Mathematics & General Classrooms",
+      "verified_name": true,
+      "center": [
+        -98.17279979,
+        26.30757206
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "way/51324165#0",
+      "osm_id": "way/51324165",
+      "part": 0,
+      "short": "HABW",
+      "code": "EHABW",
+      "name": "Health Affairs Building West Classroom A",
+      "verified_name": true,
+      "center": [
+        -98.17547074,
+        26.30735107
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "way/51324166#0",
+      "osm_id": "way/51324166",
+      "part": 0,
+      "short": "HABE",
+      "code": "EHABE",
+      "name": "Health Affairs Building East",
+      "verified_name": true,
+      "center": [
+        -98.17450193,
+        26.30739735
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "way/51324167#0",
+      "osm_id": "way/51324167",
+      "part": 0,
+      "short": "CULP",
+      "code": "ECULP",
+      "name": "Central Utility Plant",
+      "verified_name": true,
+      "center": [
+        -98.17445436,
+        26.30780505
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "way/51325891#0",
+      "osm_id": "way/51325891",
+      "part": 0,
+      "short": "MLH",
+      "code": "EEMLH",
+      "name": "Emilia Schunior Ramirez Hall",
+      "verified_name": true,
+      "center": [
+        -98.17747769,
+        26.30587221
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "way/51326483#0",
+      "osm_id": "way/51326483",
+      "part": 0,
+      "short": "LABS",
+      "code": "ELABS",
+      "name": "Liberal Arts Building South",
+      "verified_name": true,
+      "center": [
+        -98.17611368,
+        26.30621366
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "way/51326484#0",
+      "osm_id": "way/51326484",
+      "part": 0,
+      "short": "STHC",
+      "code": "ESTHC",
+      "name": "Student Health Center",
+      "verified_name": true,
+      "center": [
+        -98.17753829,
+        26.30955298
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "way/51326485#0",
+      "osm_id": "way/51326485",
+      "part": 0,
+      "short": "REC",
+      "code": "EUREC",
+      "name": "University Recreation",
+      "verified_name": true,
+      "center": [
+        -98.17775718,
+        26.31022806
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "way/51326558#0",
+      "osm_id": "way/51326558",
+      "part": 0,
+      "short": "DBCX",
+      "code": "EDBCX",
+      "name": "Dining & Ballroom Complex",
+      "verified_name": true,
+      "center": [
+        -98.17611521,
+        26.30518125
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "way/51326561#0",
+      "osm_id": "way/51326561",
+      "part": 0,
+      "short": "UNION",
+      "code": "ESTUN",
+      "name": "Student Union",
+      "verified_name": true,
+      "center": [
+        -98.1752537,
+        26.30548938
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "way/51326562#0",
+      "osm_id": "way/51326562",
+      "part": 0,
+      "short": "CHAP",
+      "code": "ECHAP",
+      "name": "Chapel",
+      "verified_name": true,
+      "center": [
+        -98.17470761,
+        26.30532917
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "way/51326610#0",
+      "osm_id": "way/51326610",
+      "part": 0,
+      "short": "LIB",
+      "code": "ELIBR",
+      "name": "University Library",
+      "verified_name": true,
+      "center": [
+        -98.17385987,
+        26.30665542
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "way/51326611#0",
+      "osm_id": "way/51326611",
+      "part": 0,
+      "short": "LCTR",
+      "code": "ELCTR",
+      "name": "The Learning Center",
+      "verified_name": true,
+      "center": [
+        -98.17309264,
+        26.30635426
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "way/51326612#0",
+      "osm_id": "way/51326612",
+      "part": 0,
+      "short": "ACSB",
+      "code": "EACSB",
+      "name": "Academic Services",
+      "verified_name": true,
+      "center": [
+        -98.1727991,
+        26.30546035
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "way/235015875#0",
+      "osm_id": "way/235015875",
+      "part": 0,
+      "short": "BNSB",
+      "code": "EBNSB",
+      "name": "Behavioral Neurosciences",
+      "verified_name": true,
+      "center": [
+        -98.17504961,
+        26.30772476
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "way/235015877#0",
+      "osm_id": "way/235015877",
+      "part": 0,
+      "short": "ENG",
+      "code": "EENGR",
+      "name": "Engineering",
+      "verified_name": true,
+      "center": [
+        -98.17189949,
+        26.30544076
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "way/235015878#0",
+      "osm_id": "way/235015878",
+      "part": 0,
+      "short": "PACB",
+      "code": "EPACB",
+      "name": "Performing Arts Complex B",
+      "verified_name": true,
+      "center": [
+        -98.17311934,
+        26.30385635
+      ],
+      "roof_m": 7.4
+    },
+    {
+      "id": "way/235015879#0",
+      "osm_id": "way/235015879",
+      "part": 0,
+      "short": "PACC",
+      "code": "EPACC",
+      "name": "Performing Arts Complex C",
+      "verified_name": true,
+      "center": [
+        -98.17296417,
+        26.30430747
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "way/235015881#0",
+      "osm_id": "way/235015881",
+      "part": 0,
+      "short": "HPE2",
+      "code": "EHPE2",
+      "name": "Health & Physical Education II",
+      "verified_name": true,
+      "center": [
+        -98.17026636,
+        26.30566651
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "way/235015882#0",
+      "osm_id": "way/235015882",
+      "part": 0,
+      "short": "ITTB",
+      "code": "EITTB",
+      "name": "International Trade & Technology",
+      "verified_name": true,
+      "center": [
+        -98.1694018,
+        26.30467587
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "way/235015883#0",
+      "osm_id": "way/235015883",
+      "part": 0,
+      "short": "LAMR",
+      "code": "EREB",
+      "name": "Lamar E",
+      "verified_name": true,
+      "center": [
+        -98.17416213,
+        26.30914678
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "way/235015884#0",
+      "osm_id": "way/235015884",
+      "part": 0,
+      "short": "MASS",
+      "code": "EMASS",
+      "name": "Marialice Shary Shivers Building",
+      "verified_name": true,
+      "center": [
+        -98.17533571,
+        26.30425976
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "way/235015885#0",
+      "osm_id": "way/235015885",
+      "part": 0,
+      "short": "PLAN",
+      "code": "EPLAN",
+      "name": "H.E.B. Planetarium",
+      "verified_name": true,
+      "center": [
+        -98.17192298,
+        26.30651821
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "way/235015886#0",
+      "osm_id": "way/235015886",
+      "part": 0,
+      "short": "MSAC",
+      "code": "EMSAC",
+      "name": "Mathematics and Science Academy",
+      "verified_name": true,
+      "center": [
+        -98.17534805,
+        26.30454765
+      ],
+      "roof_m": 3.9
+    },
+    {
+      "id": "way/235015888#0",
+      "osm_id": "way/235015888",
+      "part": 0,
+      "short": "SWKH",
+      "code": "ESWKH",
+      "name": "Schweick Hall",
+      "verified_name": true,
+      "center": [
+        -98.1726895,
+        26.30470792
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "way/235015890#0",
+      "osm_id": "way/235015890",
+      "part": 0,
+      "short": "UCTR",
+      "code": "EUCTR",
+      "name": "University Center",
+      "verified_name": true,
+      "center": [
+        -98.1764026,
+        26.3046903
+      ],
+      "roof_m": 10.9
+    },
+    {
+      "id": "way/276410578#0",
+      "osm_id": "way/276410578",
+      "part": 0,
+      "short": "HABW",
+      "code": "EHABW",
+      "name": "Health Affairs Building West Auditorium",
+      "verified_name": true,
+      "center": [
+        -98.1756347,
+        26.30777136
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "way/276410581#0",
+      "osm_id": "way/276410581",
+      "part": 0,
+      "short": "HABW",
+      "code": "EHABW",
+      "name": "Health Affairs Building West",
+      "verified_name": true,
+      "center": [
+        -98.175314,
+        26.30766269
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "way/276418088#0",
+      "osm_id": "way/276418088",
+      "part": 0,
+      "short": "VLGE",
+      "code": "EVLGE",
+      "name": "The Village E",
+      "verified_name": true,
+      "center": [
+        -98.17837938,
+        26.30913461
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "way/276418090#0",
+      "osm_id": "way/276418090",
+      "part": 0,
+      "short": "VLGB",
+      "code": "EVLGB",
+      "name": "The Village B",
+      "verified_name": true,
+      "center": [
+        -98.17790514,
+        26.3087373
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "way/276418091#0",
+      "osm_id": "way/276418091",
+      "part": 0,
+      "short": "VLGD",
+      "code": "EVLGD",
+      "name": "The Village D",
+      "verified_name": true,
+      "center": [
+        -98.17806812,
+        26.30895699
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "way/276418092#0",
+      "osm_id": "way/276418092",
+      "part": 0,
+      "short": "ASFC",
+      "code": "EASFC",
+      "name": "UTPA Academic Support Facilities Complex",
+      "verified_name": true,
+      "center": [
+        -98.17987147,
+        26.30811011
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "way/276418093#0",
+      "osm_id": "way/276418093",
+      "part": 0,
+      "short": "VLGF",
+      "code": "EVLGF",
+      "name": "The Village F",
+      "verified_name": true,
+      "center": [
+        -98.17892013,
+        26.30919723
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "way/276418094#0",
+      "osm_id": "way/276418094",
+      "part": 0,
+      "short": "VLGC",
+      "code": "EVLGC",
+      "name": "The Village C",
+      "verified_name": true,
+      "center": [
+        -98.17783842,
+        26.30912175
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "way/276418095#0",
+      "osm_id": "way/276418095",
+      "part": 0,
+      "short": "VLGA",
+      "code": "EVLGA",
+      "name": "The Village A",
+      "verified_name": true,
+      "center": [
+        -98.17767673,
+        26.30890185
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "way/574120218#0",
+      "osm_id": "way/574120218",
+      "part": 0,
+      "short": "MED",
+      "code": "EMEBL",
+      "name": "Medical Education Building (School of Medicine)",
+      "verified_name": true,
+      "center": [
+        -98.17492748,
+        26.30998594
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "way/574196378#0",
+      "osm_id": "way/574196378",
+      "part": 0,
+      "short": "B6378",
+      "code": "B6378",
+      "name": "Campus building B6378",
+      "verified_name": false,
+      "center": [
+        -98.1758587,
+        26.30489503
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "way/574206328#0",
+      "osm_id": "way/574206328",
+      "part": 0,
+      "short": "POB14",
+      "code": "EPOB14",
+      "name": "Portable",
+      "verified_name": true,
+      "center": [
+        -98.17100109,
+        26.30900996
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "way/574206383#0",
+      "osm_id": "way/574206383",
+      "part": 0,
+      "short": "PACA",
+      "code": "EPACA",
+      "name": "Performing Arts Complex A",
+      "verified_name": true,
+      "center": [
+        -98.17214913,
+        26.30419358
+      ],
+      "roof_m": 14.4
+    },
+    {
+      "id": "way/574206384#0",
+      "osm_id": "way/574206384",
+      "part": 0,
+      "short": "POB12",
+      "code": "EPOB12",
+      "name": "Portable Building 12",
+      "verified_name": true,
+      "center": [
+        -98.1718668,
+        26.30493531
+      ],
+      "roof_m": 3.9
+    },
+    {
+      "id": "way/574206385#0",
+      "osm_id": "way/574206385",
+      "part": 0,
+      "short": "POB11",
+      "code": "EPOB11",
+      "name": "Portable Building 11",
+      "verified_name": true,
+      "center": [
+        -98.17194494,
+        26.30500234
+      ],
+      "roof_m": 3.9
+    },
+    {
+      "id": "way/574206386#0",
+      "osm_id": "way/574206386",
+      "part": 0,
+      "short": "POB10",
+      "code": "EPOB10",
+      "name": "Portable Building 10",
+      "verified_name": true,
+      "center": [
+        -98.1720322,
+        26.30505715
+      ],
+      "roof_m": 3.9
+    },
+    {
+      "id": "way/574206387#0",
+      "osm_id": "way/574206387",
+      "part": 0,
+      "short": "POB9",
+      "code": "EPOB9",
+      "name": "Portable Building 9",
+      "verified_name": true,
+      "center": [
+        -98.1721305,
+        26.30509871
+      ],
+      "roof_m": 3.9
+    },
+    {
+      "id": "way/574206388#0",
+      "osm_id": "way/574206388",
+      "part": 0,
+      "short": "POB13",
+      "code": "EPOB13",
+      "name": "Portable Building 13",
+      "verified_name": true,
+      "center": [
+        -98.17180955,
+        26.3051073
+      ],
+      "roof_m": 3.9
+    },
+    {
+      "id": "way/667589708#0",
+      "osm_id": "way/667589708",
+      "part": 0,
+      "short": "INNV",
+      "code": "EINNV",
+      "name": "Innovation Building",
+      "verified_name": true,
+      "center": [
+        -98.17373906,
+        26.30566263
+      ],
+      "roof_m": 3.9
+    },
+    {
+      "id": "way/696068161#0",
+      "osm_id": "way/696068161",
+      "part": 0,
+      "short": "CS",
+      "code": "EIEAB",
+      "name": "Interdisciplinary Engineering & Academic Building",
+      "verified_name": true,
+      "center": [
+        -98.1745685,
+        26.30619132
+      ],
+      "roof_m": 10.9
+    },
+    {
+      "id": "way/717653539#0",
+      "osm_id": "way/717653539",
+      "part": 0,
+      "short": "EHSB",
+      "code": "EEHSB",
+      "name": "Environmental Health & Safety",
+      "verified_name": true,
+      "center": [
+        -98.16717061,
+        26.30836594
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "way/717751417#0",
+      "osm_id": "way/717751417",
+      "part": 0,
+      "short": "LABN",
+      "code": "ELABN",
+      "name": "Liberal Arts Building North",
+      "verified_name": true,
+      "center": [
+        -98.17649689,
+        26.30744323
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "way/717751419#0",
+      "osm_id": "way/717751419",
+      "part": 0,
+      "short": "STAC",
+      "code": "ESTAC",
+      "name": "Student Academic Center",
+      "verified_name": true,
+      "center": [
+        -98.17604416,
+        26.30436755
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "way/1055003991#0",
+      "osm_id": "way/1055003991",
+      "part": 0,
+      "short": "TROX",
+      "code": "ETROX",
+      "name": "Troxel Hall",
+      "verified_name": true,
+      "center": [
+        -98.17733721,
+        26.30685365
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "way/1055003992#0",
+      "osm_id": "way/1055003992",
+      "part": 0,
+      "short": "HRTG",
+      "code": "EHRTG",
+      "name": "Heritage Hall",
+      "verified_name": true,
+      "center": [
+        -98.17743386,
+        26.30631882
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "way/1117907688#0",
+      "osm_id": "way/1117907688",
+      "part": 0,
+      "short": "SSBL",
+      "code": "ESSBL",
+      "name": "Student Services Building",
+      "verified_name": true,
+      "center": [
+        -98.17424472,
+        26.30461053
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "way/1123310013#0",
+      "osm_id": "way/1123310013",
+      "part": 0,
+      "short": "B0013",
+      "code": "B0013",
+      "name": "Campus building B0013",
+      "verified_name": false,
+      "center": [
+        -98.17111135,
+        26.30718225
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "way/1123310014#0",
+      "osm_id": "way/1123310014",
+      "part": 0,
+      "short": "B0014",
+      "code": "B0014",
+      "name": "Campus building B0014",
+      "verified_name": false,
+      "center": [
+        -98.17123685,
+        26.30717685
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "way/1123310025#0",
+      "osm_id": "way/1123310025",
+      "part": 0,
+      "short": "B0025",
+      "code": "B0025",
+      "name": "Campus building B0025",
+      "verified_name": false,
+      "center": [
+        -98.17067284,
+        26.30714024
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "way/1123310026#0",
+      "osm_id": "way/1123310026",
+      "part": 0,
+      "short": "B0026",
+      "code": "B0026",
+      "name": "Campus building B0026",
+      "verified_name": false,
+      "center": [
+        -98.17090171,
+        26.30709352
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "way/1123310032#0",
+      "osm_id": "way/1123310032",
+      "part": 0,
+      "short": "POB4",
+      "code": "EPOB4",
+      "name": "Engineering Portable",
+      "verified_name": true,
+      "center": [
+        -98.1713928,
+        26.30537695
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "way/1188430594#0",
+      "osm_id": "way/1188430594",
+      "part": 0,
+      "short": "B0594",
+      "code": "B0594",
+      "name": "Campus building B0594",
+      "verified_name": false,
+      "center": [
+        -98.17448132,
+        26.30816378
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "way/1189601680#0",
+      "osm_id": "way/1189601680",
+      "part": 0,
+      "short": "TBLC",
+      "code": "ETBLC",
+      "name": "Team Base Learning Center",
+      "verified_name": true,
+      "center": [
+        -98.17394041,
+        26.30990312
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "way/1189724612#0",
+      "osm_id": "way/1189724612",
+      "part": 0,
+      "short": "VLG",
+      "code": "EVLG",
+      "name": "The Village",
+      "verified_name": true,
+      "center": [
+        -98.17865514,
+        26.30915172
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "way/1436752384#0",
+      "osm_id": "way/1436752384",
+      "part": 0,
+      "short": "B2384",
+      "code": "B2384",
+      "name": "Campus building B2384",
+      "verified_name": false,
+      "center": [
+        -98.18099103,
+        26.30858528
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "way/1436752385#0",
+      "osm_id": "way/1436752385",
+      "part": 0,
+      "short": "B2385",
+      "code": "B2385",
+      "name": "Campus building B2385",
+      "verified_name": false,
+      "center": [
+        -98.18095736,
+        26.30791896
+      ],
+      "roof_m": 9.4
+    },
+    {
+      "id": "way/1436752386#0",
+      "osm_id": "way/1436752386",
+      "part": 0,
+      "short": "B2386",
+      "code": "B2386",
+      "name": "Campus building B2386",
+      "verified_name": false,
+      "center": [
+        -98.18189842,
+        26.30969023
+      ],
+      "roof_m": 9.4
+    }
+  ]
+}

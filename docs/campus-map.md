@@ -156,3 +156,37 @@ The new source is NOT installed or deployed under the owner's explicit limit.
 The baseline capture diagnoses the old result; it is not a revised-style capture.
 New player-follow, closer zoom and overview native captures remain unavailable
 until manual installation/review is authorized. A build is not visual acceptance.
+
+## Tappable building labels — October 21, 2026
+
+Owner selected short labels plus tap-to-name. `assets/campus/building-labels.json`
+joins the existing named campus polygons and cached OSM tags to current display
+footprints. There are 78 footprint-part labels (69 named, 9 explicitly unverified
+building IDs). Roof/bridge-only structures are excluded. Multipart buildings have
+distinct part IDs. Polygon area centroids are used when inside the footprint;
+concave/courtyard cases use an interior pole of inaccessibility. Every stored
+anchor passes containment against its exact rendered polygon, including holes.
+
+Mapbox native point annotations use center anchors, viewport-facing badges and
+symbol-z-elevate for actual roof placement. No screen offsets or Flutter camera
+projection queue positions the labels. Badge size stays fixed across zooms;
+native collision handling hides crowded badges without displacing their anchors.
+Tap opens the full name/code card; its close button preserves the map camera.
+The former sparse full-name symbol layer is replaced. No building geometry,
+animation, GPS policy or backend is changed by this feature.
+
+Names/codes were checked where available against UTRGV's facilities inventory:
+https://www.utrgv.edu/campus-operations/departments/campus-facilities-operations/building/index.htm
+Regenerate with `python tool/build_building_labels.py PATH_TO_CACHED_OSM_XML`.
+Nine unnamed minor footprints retain neutral IDs; do not invent their names.
+
+Validation: analysis clean, 58 tests passed. Android x86_64 preview build 8013,
+installed package version 12013 on UTRGV_GO_Preview/emulator-5554, 1080x2400.
+Signing matched the installed app; in-place update preserved the signed-in session.
+Installed APK hash matched the fresh build:
+fb69475e6fa520cebf2fac70b015ddb7f816218a96fe9495e0114f0aee132145.
+Native tap/close and zoom-in, zoom-out, return-to-original checks passed; badges
+remain centered on their roofs at each scale. Evidence is in ignored
+`tmp/building-labels/`, including `zoom-and-tap.mp4`. No GPS override was needed.
+Shared camera/cowboy repairs remain separate uncommitted work. Feature branch:
+`codex/building-labels`; owner visual acceptance/main integration remain pending.

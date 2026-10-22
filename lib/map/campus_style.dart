@@ -70,26 +70,6 @@ abstract final class CampusStyle {
         },
       },
       {
-        'id': 'campus-labels',
-        'type': 'symbol',
-        'source': 'campus-data',
-        'minzoom': 16,
-        'filter': ['has', 'label'],
-        'layout': {
-          'text-field': ['get', 'label'],
-          'text-font': ['DIN Pro Medium', 'Arial Unicode MS Regular'],
-          'text-size': 12,
-          'text-max-width': 9,
-          'text-padding': 16,
-          'text-offset': [0, -1.2],
-        },
-        'paint': {
-          'text-color': '#284e46',
-          'text-halo-color': '#effff2',
-          'text-halo-width': 1.5,
-        },
-      },
-      {
         'id': 'player-ring',
         'type': 'circle',
         'source': 'player',

@@ -17,6 +17,8 @@ import '../map/campus_geography.dart';
 import '../map/campus_location.dart';
 import '../map/kitty_island.dart';
 import '../map/campus_creatures.dart';
+import '../map/building_labels.dart';
+import '../widgets/building_name_card.dart';
 import '../widgets/campus_creature.dart';
 import '../widgets/kitty_island_cats.dart';
 import '../map/campus_style.dart';
@@ -37,6 +39,9 @@ class MapScreen extends StatefulWidget {
 class _MapScreenState extends State<MapScreen>
     with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   MapboxMap? _map;
+  final _buildingLabels = BuildingLabelAnnotations();
+  List<BuildingLabel> _buildingNames = const [];
+  BuildingLabel? _selectedBuilding;
   CampusGeography? _geography;
   CampusLocationPolicy? _location;
   CameraViewportState? _initialViewport;
@@ -147,6 +152,9 @@ class _MapScreenState extends State<MapScreen>
         'assets/campus/features.geojson',
       );
       final geography = CampusGeography.fromGeoJson(boundary);
+      final buildingNames = BuildingLabel.parse(
+        await rootBundle.loadString('assets/campus/building-labels.json'),
+      );
       final style = jsonEncode(CampusStyle.build(boundary, data));
       // Pass a local style at native construction; never request Standard.
       // Only public geographic data is cached, never location or credentials.
@@ -158,6 +166,7 @@ class _MapScreenState extends State<MapScreen>
       _cameraSession.initialize(_size?.width ?? 390);
       setState(() {
         _geography = geography;
+        _buildingNames = buildingNames;
         _location = CampusLocationPolicy(geography);
         _styleJson = style;
         _styleUri = file.uri.toString();
@@ -213,8 +222,14 @@ class _MapScreenState extends State<MapScreen>
     if (_map == null || !_styleLoaded || !_configured) return;
     try {
       if (!mounted) return;
+      final pixelRatio = MediaQuery.devicePixelRatioOf(context);
       await _renderPlayer();
       await _chapelProjector.request(invalidate: true);
+      await _buildingLabels.install(_map!, _buildingNames, (building) {
+        if (mounted && _foreground && !_gameOpen) {
+          setState(() => _selectedBuilding = building);
+        }
+      }, pixelRatio: pixelRatio);
       if (!_hasFitted) {
         await _viewCampus();
         _cameraSession.explore();
@@ -714,6 +729,7 @@ class _MapScreenState extends State<MapScreen>
       _error = null;
     });
     try {
+      await _buildingLabels.reset(_map!);
       if (!_configured) {
         await _configureMap(_map!);
         _configured = true;
@@ -874,6 +890,7 @@ class _MapScreenState extends State<MapScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _buildingLabels.dispose();
     unawaited(_stopGps());
     _travelTicker.dispose();
     _projector.dispose();
@@ -1130,6 +1147,16 @@ class _MapScreenState extends State<MapScreen>
                 active: _ready && _error == null && _foreground && !_gameOpen,
               ),
               if (_ready && _error == null) ...[
+                if (_selectedBuilding != null && !_gameOpen && _foreground)
+                  Positioned(
+                    left: 12,
+                    right: 12,
+                    bottom: 174,
+                    child: BuildingNameCard(
+                      building: _selectedBuilding!,
+                      onClose: () => setState(() => _selectedBuilding = null),
+                    ),
+                  ),
                 Positioned(
                   left: 12,
                   top: 96,
