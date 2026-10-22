@@ -147,7 +147,7 @@ map/cowboy edits were included in the preview build and preserved outside this
 feature's commit; the full source-file hash manifest is in the ignored evidence
 directory.
 
-Native touch feel, real signup/sign-in across two devices, outdoor GPS and owner
+Physical touch feel, actual two-device operation, outdoor GPS and owner
 visual acceptance remain separate from these automated checks. No phone install,
 production release, purchase or transaction is authorized by this implementation.
 
@@ -159,3 +159,76 @@ guide identifies itself as older documentation; lifecycle, asset loading,
 disposal and GameWidget behavior were checked against installed 1.38.2 source.
 
 Floating-hat revision preview: installed version code **16016** on the same AVD with matching signing, retained session and byte-for-byte APK verification (SHA-256 e5ec2197d5c3369cdb7df5ce3aafbb8696880656e1f114c2087f7a9e896cf419). Native capture updated; no team was selected.
+
+## October 22 — live signup, gameplay and full process restart
+
+Owner-requested end-to-end tests **passed** against the actual configured
+Supabase project on UTRGV_GO_Preview, emulator-5554, 1080×2400. This is native
+Flutter driver execution, not repository doubles or widget-only rendering.
+
+- Created two synthetic `.edu` accounts through the actual Create account form.
+  The real signup trigger created each private player profile. Each account was
+  initially gated with zero membership rows.
+- Opened/canceled team information for each account; reread Supabase and confirmed
+  that canceling created no assignment. Explicit confirmation saved Art and Stuff
+  for A and Math and Engineering for B.
+- For both accounts, checked the live account_teams row, matching Auth/profile ID,
+  TeamScope state and the visible account/profile dialog. Membership is stored
+  separately from the profile table by design; the profile UI reads that saved
+  membership. A new independent authenticated Supabase client read the same team.
+- Signed out of A, created/selected B, then signed out and signed A back in. A
+  immediately reached the map with its own original team, without onboarding or
+  another account's cached team.
+- Launched the existing chapel GameHost after the membership gate. Used a
+  dedicated run-specific local chapel save and explicitly debug-only GPS bypass.
+  Delivered two actual timed Flutter pointer swipes through the game's input
+  callbacks, waited for normal live-loop resolution, answered both correctly and
+  observed persisted test HP drop **100 → 75 → 50**. Closed gameplay back to the
+  real map and rechecked the saved team/profile.
+- Ran `am force-stop`, verified the app PID no longer existed, then launched the
+  activity with Android reporting **LaunchState: COLD**. Reconnected a fresh driver
+  to the new process. The restored test session immediately reached MainScreen;
+  TeamSelectionScreen was absent. The profile and Supabase still had the exact
+  same account, team ID and original `chosen_at` timestamp.
+
+Reusable test entry/host: `test_driver/team_app.dart` and `team_flow.dart`.
+The explicit debug-only entry requires a named run and verifies the exact backend
+host. It runs the real CampusApp/AuthGate/TeamGate with a separate test auth
+storage namespace, keeping the owner's normal session untouched. Flutter driver
+is a dev dependency only; normal `lib/main.dart` never imports or enables it.
+The two login field keys are the only app-code changes required for reliable
+form targeting. No gameplay, membership or backend behavior needed fixing.
+
+The test build was version 16017. After testing, restored a fresh **normal app**
+build, version **16018**, via an in-place signed update. Pulled back the installed
+APK and verified its SHA-256 matched the fresh build:
+`dba7e5172cf81b0d5f37e046018c0150ab0416915917ad3ba9afacb8c137a460`.
+The owner's original session returned to its still-unassigned team screen;
+no team was chosen for that account. No app data was cleared, uninstalled or
+downgraded. Removed the test VM-service port forwarding.
+
+Analysis passed and all **72 existing unit/widget tests** passed after adding
+the SDK driver dependency and field keys. Driver phases `create` and `relaunch`
+both passed. New native screenshots: `docs/evidence/team-e2e-chapel-play.png` and
+`docs/evidence/team-after-cold-relaunch.png`. Detailed JSON, screenshots and logs
+are retained under ignored `output/team-e2e/` and `tmp/team-e2e/`. The two synthetic
+test accounts remain assigned for reproducibility; random test credentials stay
+only in the ignored fixture file and are not published. No real users or real
+memberships were edited or deleted.
+
+To reproduce, prepare a new ignored fixture with `run`, synthetic `a`/`b`
+mailboxes and a random `password`, and an ignored build-config copy with the
+same `TEAM_E2E_RUN`. Build the explicit test entry, install in place with a
+monotonically increasing version, launch and forward its authenticated loopback
+VM-service endpoint. Supply that URL through `TEAM_VM_URL`, then run:
+
+```powershell
+dart run test_driver/team_flow.dart create output/team-e2e/fixture.json
+# Force-stop, verify no PID, cold-launch, and forward the NEW VM endpoint.
+dart run test_driver/team_flow.dart relaunch output/team-e2e/fixture.json
+```
+
+Restore a freshly built normal `lib/main.dart` preview afterward. Do not use a
+real account in the fixture, replay create against an already-used fixture, ship
+the test entry or disable VM-service authentication. Physical devices and real
+outdoor GPS were not part of this test.

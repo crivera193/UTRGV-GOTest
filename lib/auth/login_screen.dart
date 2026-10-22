@@ -235,6 +235,9 @@ class _LoginScreenState extends State<LoginScreen> {
                                             Semantics(
                                               label: 'School email',
                                               child: TextFormField(
+                                                key: const ValueKey(
+                                                  'account-email',
+                                                ),
                                                 controller: _email,
                                                 enabled: !_busy,
                                                 keyboardType:
@@ -271,6 +274,9 @@ class _LoginScreenState extends State<LoginScreen> {
                                             Semantics(
                                               label: 'Password',
                                               child: TextFormField(
+                                                key: const ValueKey(
+                                                  'account-password',
+                                                ),
                                                 controller: _password,
                                                 enabled: !_busy,
                                                 obscureText: _obscure,
