@@ -23,6 +23,7 @@ class SpotProximity {
   final _suppressed = <String>{};
   final _exitAt = <String, DateTime>{};
   CampusFix? _fix;
+  CampusFix? get currentFix => _fix;
   DateTime? _lastTimestamp;
   bool _onCampus = false;
   String? _activeSpotId;

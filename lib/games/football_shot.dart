@@ -9,7 +9,13 @@ class FootballShot {
   static const centers = [-15.0, -5.0, 5.0, 15.0];
   static const halfWidth = 4.2, radius = .18;
   static FootballShot? fromSwipe(Offset delta) {
-    if (!delta.dx.isFinite || !delta.dy.isFinite || delta.dy > -45) return null;
+    if (!delta.dx.isFinite ||
+        !delta.dy.isFinite ||
+        delta.dy > -45 ||
+        delta.dy < -650 ||
+        delta.dx.abs() > 400) {
+      return null;
+    }
     final power = (-delta.dy / 220).clamp(.35, 1.0);
     final vz = 18 + 8 * power;
     final slope = (delta.dx / -delta.dy).clamp(-.65, .65);

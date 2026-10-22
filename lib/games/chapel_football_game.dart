@@ -21,6 +21,7 @@ class ChapelFootballGame extends SessionGame with DragCallbacks {
   int? _pointer, _shotId;
   Offset? _start, _end;
   FootballShot? _shot;
+  Offset? _kickDelta;
   double _time = 0;
   Offset logical(Offset p) =>
       Offset(p.dx * 400 / canvasSize.x, p.dy * 650 / canvasSize.y);
@@ -77,6 +78,7 @@ class ChapelFootballGame extends SessionGame with DragCallbacks {
     _shotId = attack.fire();
     if (_shotId != null) {
       _shot = shot;
+      _kickDelta = delta;
       _time = 0;
     }
   }
@@ -101,14 +103,8 @@ class ChapelFootballGame extends SessionGame with DragCallbacks {
     _time += dt;
     // Analytic plane crossing: a long frame cannot skip a goal.
     if (_time >= shot.crossingTime) {
-      final goal = shot.goal;
-      final outcome = goal == null
-          ? ShotOutcome.miss
-          : attack.question.answerId(goal) == attack.question.correctId
-          ? ShotOutcome.correct
-          : ShotOutcome.wrong;
       _shot = null;
-      unawaited(attack.resolve(_shotId!, outcome));
+      unawaited(attack.resolveKick(_shotId!, _kickDelta!));
     }
   }
 
@@ -310,7 +306,7 @@ class ChapelFootballGame extends SessionGame with DragCallbacks {
       text(
         c,
         attack.captured
-            ? '◆ Team A\nChapel Point · 100 / 100 HP\nSaved on this device'
+            ? '◆ ${attack.point.playerTeam.displayName}\nChapel Point · ${attack.point.state.hp} HP\nSaved online'
             : 'Earned damage is saved.\nReturn to the map to try again.',
         const Rect.fromLTWH(55, 455, 290, 65),
         font: 17,

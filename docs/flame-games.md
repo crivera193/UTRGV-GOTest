@@ -1,3 +1,31 @@
+# Live point attacks — October 22, 2026
+
+This section supersedes the historical local/preview notes below. The owner requires live gameplay with only a few placeholder questions until the full bank is supplied.
+
+Production uses Supabase project `oipidltfvzodpiumdsaq`. Both migrations `20261022160000_live_point_attacks.sql` and `20261022170000_attack_conflict_responses.sql` were applied successfully through the authenticated crivera193 dashboard. Do not replay them. The second migration returns application conflicts as HTTP 409 instead of a database serialization failure; stale-question REST calls timed out with the original error and passed after this correction.
+
+`app_private.question_bank` holds four labeled placeholder questions and private correct indices. Only the admin manages the bank. Each attack snapshots one random question, shuffles its answer choices, and sends the prompt and choices without the answer key. The next selection avoids an immediate repeat when another active question exists. Editing/deactivating bank rows does not change questions already dealt; increment `version` for authored revisions. Replace placeholders with the supplied list later. An empty bank blocks new attacks; if it empties during an attack, earned damage is retained and that attack ends.
+
+`public.game_spots` is authoritative shared state. The chapel retains stable ID `echap-local-v1`, starts unclaimed at 100 HP, takes 25 damage per correct kick, and restores 100 HP on capture. Owners use the same canonical IDs as permanent account membership. Former inconsistent local saves are preserved on disk but never imported or used by gameplay. Membership/profile records remain unchanged by attacks.
+
+The authenticated RPCs are `begin_point_attack`, `read_point_attack` and `submit_point_kick`. Begin derives the player and permanent team from authentication, requires a fresh fix (10 seconds, accuracy at most 15 m) and distance plus uncertainty within 39.624 m, and rejects friendly points. GPS values are client-reported, not device attestation. Position is not stored. Reopening an active attack resumes its existing question; inactivity expires it after 15 minutes. Leaving does not erase earned damage. A capture invalidates competing attacks using a capture epoch.
+
+Every valid kick consumes its current question: miss/wrong means zero damage and a loss, correct means damage. All outcomes advance to a new question after feedback/Continue; there is no three-shot cutoff. Play ends at capture or Close. Supabase computes the answer lane from the same bounded swipe trajectory as `FootballShot`; clients cannot submit a result, damage or team. Question IDs reject stale submissions, command IDs return identical receipts on retry, and locks serialize shared HP/capture. A lost response keeps the same command for Retry; a conflict refreshes the authoritative question or ends a superseded attack. Offline operation never awards damage. Realtime point updates and refresh on foreground/return update the map/card.
+
+The point card and game use the authenticated nested navigator, fixing the game-hidden-behind-card regression. Production debug launchers, local resets and demo routes were removed. Explicit test entry points remain under `test_driver/`; they use a separate authentication storage namespace and a private QA point at synthetic coordinates. An admin-only metadata flag gates QA rows; ordinary accounts cannot see them. Test accounts retain their permanent teams.
+
+Verification on UTRGV_GO_Preview / emulator-5554 (1080×2400): 71 Flutter tests passed; analysis clean after host logging cleanup. Live REST checks passed for authentication/RLS, private answers, GPS rejection, random next questions, more than three losses, correct damage, duplicate receipts, stale-question rejection, simultaneous submissions and second-account shared HP. Native driver used the actual card > Attack > GameWidget pointer path, missed/advanced, force-stopped the process, verified a COLD launch, resumed the exact attack/question/HP/team, kicked correctly twice and captured for Art and Stuff. Both live accounts then read owner `art_stuff`, HP 100, revision 4; profiles/memberships remained intact. The real chapel stayed neutral at HP 100, revision 0. Captures: [before close](evidence/live-attacks/before-close.png), [captured online](evidence/live-attacks/captured-online.png).
+
+The test build used input build 12019 (installed versionCode 16019); the normal app was restored with fresh build 12020/versionCode 16020, the same signing certificate and an in-place install preserving user data. Normal and test auth storage are distinct. The last recovery refinements are covered by focused unit tests; native full-flow evidence precedes those error-path-only refinements. Android Mapbox/Kotlin plugin migration warning remains; no iOS build or real outdoor GPS acceptance was performed. Feature remains on `codex/live-attacks` for owner review; unrelated map/cowboy work is excluded from its commit but present in the combined emulator build.
+
+Reproduction uses `test_driver/team_app.dart` and `test_driver/live_attacks_flow.dart prepare|resume`, the ignored `.env.app.local.json` and synthetic fixture configuration. Prepare records the active question; force-stop, verify no PID, launch cold and reconnect the new VM endpoint before resume. QA point needs 50 HP before this two-correct-kick capture scenario. No credentials, VM tokens or real location data belong in tracked evidence.
+
+References checked: [Supabase Flutter stream](https://supabase.com/docs/reference/dart/stream), [database functions](https://supabase.com/docs/guides/database/functions), [PostgREST custom HTTP errors](https://docs.postgrest.org/en/stable/references/errors.html#raise-errors-with-http-status-codes).
+
+---
+
+Historical implementation record (superseded where it describes local or preview gameplay):
+
 # Chapel capture prototype — October 20, 2026
 
 This section supersedes the historical preview-only foundation below. The chapel

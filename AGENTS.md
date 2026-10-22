@@ -101,3 +101,9 @@ Maintained October 12, 2026. This folder is the new senior college project using
 Comparison on October 12, 2026 used Helios's root and unity/AGENTS.md; Iron Route's AGENTS.md and sibling BlenderBridge/AGENTS.md; Little Weeps' AGENTS.md and docs/ai/GAME_CREATION_WORKFLOW.md; and Agent Bridge's AGENTS.md as references. Adapted preservation, bounded tool use, connection checks, coherent edits, proportionate verification, actual visual review and concise delivery. The owner clarified that the request was to audit the source instructions and create this project's file; unintended source-file edits were undone. Future comparison work must leave those source files unchanged unless explicitly requested.
 
 This file is the project's single initial workflow reference. Later guides should cover demonstrated needs and link here rather than duplicate these rules. Helios's historical P: paths, runtime junctions and two-repository cleanup gates; Little Weeps' family cast/four-player/server policies; and generated Unity tool configuration were not transferred. The referenced Ken-PC runbook was unavailable during setup; no remote connection or operation was performed.
+
+## Live gameplay direction — October 22, 2026
+
+- Owner requires live Supabase gameplay; do not introduce device-local combat or production demo fallbacks. Use a few clearly labeled placeholder questions until the owner supplies the bank.
+- Every valid kick consumes one question. A miss or wrong answer causes no damage and advances; a correct kick damages the point and advances. No three-shot or three-loss cutoff. Continue until capture or the player leaves.
+- Canonical permanent teams, random question/choice snapshots, adjudication, HP, capture and idempotent receipts belong to Supabase. Preserve active questions on close/reopen; never trust a client-provided answer result, team or damage value. See docs/flame-games.md for the live contract and verification.

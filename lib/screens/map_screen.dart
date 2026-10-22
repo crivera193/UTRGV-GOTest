@@ -1,13 +1,15 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:geolocator/geolocator.dart' as gps;
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart' hide Size;
 import 'package:permission_handler/permission_handler.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import '../teams/team_membership.dart';
+import '../games/live_attack_repository.dart';
 import '../games/game_host.dart';
 import '../games/chapel_capture.dart';
 import '../games/chapel_card.dart';
@@ -76,10 +78,10 @@ class _MapScreenState extends State<MapScreen>
   );
   late final LatestProjection<List<CampusCreaturePlacement>> _creatureProjector;
   bool _gameOpen = false, _chapelCardOpen = false;
-  final _chapel = ChapelPoint(LocalPointPersistence());
+  late final ChapelPoint _chapel;
+  bool _chapelInitialized = false;
   final _chapelPlacement = ValueNotifier<Offset?>(null);
   late final LatestProjection<Offset> _chapelProjector;
-  String? _chapelLoadError;
 
   @override
   void initState() {
@@ -126,13 +128,6 @@ class _MapScreenState extends State<MapScreen>
         if (mounted) _chapelPlacement.value = value;
       },
     );
-    unawaited(
-      _chapel.load().catchError((Object _) {
-        if (mounted) {
-          setState(() => _chapelLoadError = 'Local point storage unavailable.');
-        }
-      }),
-    );
     _projector = LatestProjection<CowboyPlacement>(
       read: _readCowboyProjection,
       apply: (placement) {
@@ -141,6 +136,19 @@ class _MapScreenState extends State<MapScreen>
     );
     _travelTicker = createTicker(_advanceTravel);
     if (hasMapboxConfiguration) unawaited(_loadCampus());
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_chapelInitialized) {
+      _chapelInitialized = true;
+      _chapel = ChapelPoint(
+        SupabaseAttackRepository(Supabase.instance.client),
+        playerTeam: TeamScope.of(context).team!,
+      );
+      unawaited(_chapel.load());
+    }
   }
 
   Future<void> _loadCampus() async {
@@ -760,6 +768,7 @@ class _MapScreenState extends State<MapScreen>
     } else if (state == AppLifecycleState.resumed) {
       _foreground = true;
       _syncBuildingCreatures();
+      if (_chapelInitialized) unawaited(_chapel.load());
       if (_locationEnabled) unawaited(_resumeGps());
     }
   }
@@ -774,10 +783,11 @@ class _MapScreenState extends State<MapScreen>
   }
 
   String? _chapelAttackReason() {
-    if (_chapel.busy) return 'Saving local point state…';
+    if (_chapel.busy) return 'Connecting to live point…';
     if (!_foreground || !_chapel.loaded) {
-      return _chapelLoadError ?? 'Loading local point state…';
+      return _chapel.error ?? 'Loading live point…';
     }
+    if (_chapel.error != null) return _chapel.error;
     if (_location?.state != CampusGpsState.onCampus) {
       return 'Enable GPS and move safely onto campus.';
     }
@@ -790,6 +800,7 @@ class _MapScreenState extends State<MapScreen>
     try {
       await showDialog<void>(
         context: context,
+        useRootNavigator: false,
         builder: (_) => ChapelCard(
           point: _chapel,
           reason: _chapelAttackReason,
@@ -803,16 +814,16 @@ class _MapScreenState extends State<MapScreen>
   }
 
   Future<void> _attackChapel() async {
-    if (_gameOpen ||
-        _chapelAttackReason() != null ||
-        _chapel.state.owner == ChapelConfig.playerTeam) {
+    if (_gameOpen || _chapelAttackReason() != null || _chapel.friendly) {
       return;
     }
     if (!_proximity.launchAttack(chapelSpot, DateTime.now())) return;
     final wasFollowing = _following;
-    final attack = CaptureSession(_chapel);
+    CaptureSession? attack;
     setState(() => _gameOpen = true);
     try {
+      attack = await CaptureSession.open(_chapel, _proximity.currentFix!);
+      if (!mounted) return;
       await Navigator.of(context).push<GameExit>(
         MaterialPageRoute(
           builder: (_) => GameHost(
@@ -826,7 +837,8 @@ class _MapScreenState extends State<MapScreen>
         ),
       );
     } finally {
-      attack.close();
+      attack?.close();
+      unawaited(_chapel.load());
       _proximity.close(DateTime.now());
       if (mounted) {
         setState(() {
@@ -838,53 +850,8 @@ class _MapScreenState extends State<MapScreen>
     }
   }
 
-  Future<void> _openGame({bool debug = false}) async {
-    if (!debug && _proximity.selected?.id == ChapelConfig.id) {
-      await _showChapel();
-      return;
-    }
-    if (_gameOpen ||
-        !_foreground ||
-        !(ModalRoute.of(context)?.isCurrent ?? true)) {
-      return;
-    }
-    if (debug && !kDebugMode) return;
-    if (!debug && _location?.state != CampusGpsState.onCampus) {
-      setState(() => _proximity.unavailable());
-      return;
-    }
-    final spot = debug ? debugDemoSpot : _proximity.launch(DateTime.now());
-    if (spot == null) {
-      setState(() {});
-      return;
-    }
-    final wasFollowing = _following;
-    setState(() => _gameOpen = true);
-    try {
-      await Navigator.of(context).push<GameExit>(
-        MaterialPageRoute(
-          builder: (_) => GameHost(
-            gameId: spot.gameId,
-            session: GameSessionContext(
-              spotId: spot.id,
-              startedAt: DateTime.now(),
-              debug: debug,
-            ),
-          ),
-        ),
-      );
-    } finally {
-      _proximity.close(DateTime.now());
-      if (mounted) {
-        setState(() {
-          _gameOpen = false;
-          _following = wasFollowing;
-        });
-        // Keep the existing map, camera and follow-mode untouched on return.
-        // The next real GPS update may move the camera if follow was enabled.
-        unawaited(_renderPlayer());
-      }
-    }
+  Future<void> _openGame() async {
+    await _showChapel();
   }
 
   @override
@@ -895,6 +862,7 @@ class _MapScreenState extends State<MapScreen>
     _travelTicker.dispose();
     _projector.dispose();
     _cowboyPlacement.dispose();
+    if (_chapelInitialized) _chapel.dispose();
     _chapelProjector.dispose();
     _chapelPlacement.dispose();
     _kittyProjector.dispose();
@@ -1069,15 +1037,6 @@ class _MapScreenState extends State<MapScreen>
                       : CampusBuildingCreatures(placements: placements),
                 ),
               ),
-              if (kDebugMode)
-                Positioned(
-                  right: 12,
-                  top: 86,
-                  child: FilledButton.tonal(
-                    onPressed: _gameOpen ? null : () => _openGame(debug: true),
-                    child: const Text('DEBUG · Game preview'),
-                  ),
-                ),
               if (_ready &&
                   !_gameOpen &&
                   _proximity.state == SpotState.eligible)

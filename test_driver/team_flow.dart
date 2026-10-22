@@ -129,33 +129,8 @@ Future<void> main(List<String> args) async {
         }
         await form(fixture['a'] as String, signup: false);
         await assertSaved(fixture['a'] as String, 'art_stuff', 'Art and Stuff');
-        await driver.requestData(jsonEncode({'op': 'play'}));
-        await driver.waitFor(
-          find.text('Demo quiz · Which campus are we exploring?'),
-        );
-        await capture('chapel-before-play');
-        for (final dx in [-90, -30]) {
-          await driver.requestData(
-            jsonEncode({'op': 'swipe', 'dx': dx, 'dy': -180}),
-          );
-          Map result = {};
-          for (var frame = 0; frame < 60; frame++) {
-            await Future<void>.delayed(const Duration(milliseconds: 100));
-            result = await command('game') as Map;
-            if (result['phase'] == 'resolving') break;
-          }
-          check(
-            result['phase'] == 'resolving',
-            'Shot did not resolve through live game loop',
-          );
-          evidence['shot-$dx'] = result;
-          await capture('chapel-result-$dx');
-          await tapText('Continue');
-        }
-        final game = await command('game') as Map;
-        check(game['hp'] == 50, 'Two correct live shots should retain 50 HP');
-        await tapText('Close');
-        await assertSaved(fixture['a'] as String, 'art_stuff', 'Art and Stuff');
+        // Combat uses the live QA bank and dedicated close/reopen suite in
+        // live_attacks_flow.dart; never assume fixed demo questions or answers.
         await capture('before-force-stop');
       } else if (phase == 'relaunch') {
         await assertSaved(fixture['a'] as String, 'art_stuff', 'Art and Stuff');

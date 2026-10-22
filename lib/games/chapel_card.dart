@@ -1,8 +1,7 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
+import '../teams/game_team.dart';
 import 'package:flutter/material.dart';
 import 'chapel_capture.dart';
-import 'game_host.dart';
 
 /// Original ring, suspended diamond and pedestal; owner is conveyed in text too.
 class ChapelBeacon extends StatelessWidget {
@@ -11,9 +10,9 @@ class ChapelBeacon extends StatelessWidget {
   final VoidCallback? onTap;
   @override
   Widget build(BuildContext context) {
-    final color = owner == ChapelConfig.playerTeam
-        ? const Color(0xff007d88)
-        : const Color(0xff9c4bd1);
+    final color = owner == 'Unclaimed'
+        ? Colors.grey
+        : GameTeam.values.firstWhere((t) => t.displayName == owner).color;
     return Semantics(
       label: 'Chapel Point, $owner. Open point card',
       button: true,
@@ -112,10 +111,12 @@ class _ChapelCardState extends State<ChapelCard> {
     builder: (context, _) {
       final point = widget.point.state, d = widget.distance();
       final reason = widget.point.busy
-          ? 'Saving local point state…'
-          : point.owner == ChapelConfig.playerTeam
+          ? 'Connecting to live point…'
+          : widget.point.friendly
           ? 'Your team controls this point'
-          : widget.reason();
+          : !widget.point.loaded
+          ? 'Loading live point…'
+          : widget.point.error ?? widget.reason();
       return Dialog.fullscreen(
         child: Scaffold(
           appBar: AppBar(
@@ -170,14 +171,16 @@ class _ChapelCardState extends State<ChapelCard> {
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 16),
-                  Text('◆ ${point.owner} · You: ${ChapelConfig.playerTeam}'),
-                  const Text('Ownership and damage are local to this device.'),
+                  Text(
+                    '◆ ${point.owner} · You: ${widget.point.playerTeam.displayName}',
+                  ),
+                  const Text('Ownership and damage are saved online.'),
                   const SizedBox(height: 16),
                   LinearProgressIndicator(
-                    value: point.hp / ChapelConfig.maxHp,
+                    value: point.hp / point.maxHp,
                     minHeight: 12,
                   ),
-                  Text('${point.hp} / ${ChapelConfig.maxHp} HP'),
+                  Text('${point.hp} / ${point.maxHp} HP'),
                   Text(
                     d == null
                         ? 'Distance unavailable · enable foreground GPS'
@@ -199,14 +202,20 @@ class _ChapelCardState extends State<ChapelCard> {
                         : () async {
                             // Recheck at press time; a stale fix never stays eligible via this card.
                             if (widget.reason() != null ||
-                                widget.point.state.owner ==
-                                    ChapelConfig.playerTeam) {
+                                widget.point.friendly) {
                               setState(() {});
                               return;
                             }
                             setState(() => _launching = true);
                             try {
                               await widget.onAttack();
+                            } catch (_) {
+                              if (mounted) {
+                                setState(
+                                  () => _error =
+                                      'Could not open the live attack. Refresh the point and retry.',
+                                );
+                              }
                             } finally {
                               if (mounted) setState(() => _launching = false);
                             }
@@ -214,21 +223,13 @@ class _ChapelCardState extends State<ChapelCard> {
                     icon: const Icon(Icons.sports_football),
                     label: const Text('Attack'),
                   ),
-                  if (kDebugMode)
+                  if (widget.point.error != null || _error != null)
                     TextButton(
-                      onPressed: _launching
-                          ? null
-                          : () async {
-                              try {
-                                await widget.point.reset();
-                                setState(() => _error = null);
-                              } catch (_) {
-                                setState(
-                                  () => _error = 'Could not save debug reset.',
-                                );
-                              }
-                            },
-                      child: const Text('DEBUG · Reset local owner and HP'),
+                      onPressed: () async {
+                        await widget.point.load();
+                        if (mounted) setState(() => _error = null);
+                      },
+                      child: const Text('Refresh point'),
                     ),
                 ],
               ),
@@ -237,80 +238,5 @@ class _ChapelCardState extends State<ChapelCard> {
         ),
       );
     },
-  );
-}
-
-class ChapelDebugLauncher extends StatefulWidget {
-  const ChapelDebugLauncher({super.key});
-  @override
-  State<ChapelDebugLauncher> createState() => _ChapelDebugLauncherState();
-}
-
-class _ChapelDebugLauncherState extends State<ChapelDebugLauncher> {
-  // Separate key adapter below keeps debug reviews away from normal local state.
-  final point = ChapelPoint(
-    LocalPointPersistence(key: 'utrgv_go_chapel_debug_v1'),
-  );
-  String? error;
-  @override
-  void initState() {
-    super.initState();
-    point
-        .load()
-        .then((_) {
-          if (mounted) setState(() {});
-        })
-        .catchError((Object e) {
-          if (mounted) setState(() => error = 'Local save unavailable');
-        });
-  }
-
-  @override
-  void dispose() {
-    point.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('DEBUG · Chapel capture')),
-    body: Center(
-      child: error != null
-          ? Text(error!)
-          : !point.loaded
-          ? const CircularProgressIndicator()
-          : FilledButton(
-              onPressed: () => showDialog<void>(
-                context: context,
-                builder: (_) => ChapelCard(
-                  point: point,
-                  reason: () => null,
-                  distance: () => null,
-                  debug: true,
-                  onAttack: () async {
-                    final attack = CaptureSession(point);
-                    try {
-                      await Navigator.of(context).push<GameExit>(
-                        MaterialPageRoute(
-                          builder: (_) => GameHost(
-                            gameId: 'chapel-football',
-                            session: GameSessionContext(
-                              spotId: ChapelConfig.id,
-                              startedAt: DateTime.now(),
-                              debug: true,
-                              capture: attack,
-                            ),
-                          ),
-                        ),
-                      );
-                    } finally {
-                      attack.close();
-                    }
-                  },
-                ),
-              ),
-              child: const Text('Open chapel · no GPS eligibility'),
-            ),
-    ),
   );
 }

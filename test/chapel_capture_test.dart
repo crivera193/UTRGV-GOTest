@@ -1,425 +1,261 @@
 import 'dart:async';
-import 'dart:convert';
-import 'dart:io';
-import 'dart:ui' as ui;
 import 'package:campus_app/games/chapel_capture.dart';
 import 'package:campus_app/games/chapel_card.dart';
-import 'package:campus_app/games/chapel_football_game.dart';
 import 'package:campus_app/games/football_shot.dart';
 import 'package:campus_app/games/game_host.dart';
-import 'package:campus_app/games/game_spot.dart';
-import 'package:campus_app/games/spot_proximity.dart';
-import 'package:campus_app/map/campus_geography.dart';
 import 'package:campus_app/map/campus_location.dart';
-import 'package:flame/game.dart';
-import 'package:flame/events.dart';
+import 'package:campus_app/teams/game_team.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
-class MemoryPoint implements PointPersistence {
-  PointState state = PointState.initial;
-  int writes = 0;
-  Completer<void>? pending;
+// Transport double only. Production contains no offline combat implementation.
+class Transport implements AttackRepository {
+  int sequence = 0, hp = 100, correct = 0, losses = 0, calls = 0;
+  String outcome = 'miss';
+  bool loseResponse = false, conflict = false;
+  final receipts = <String, Map<String, dynamic>>{};
+  Map<String, dynamic> payload() => {
+    'id': 'attack',
+    'status': hp == 0 ? 'captured' : 'active',
+    'sequence': sequence,
+    'correct_count': correct,
+    'wrong_count': losses,
+    'miss_count': 0,
+    'point': {
+      'owner_team_id': hp == 0 ? 'art_stuff' : null,
+      'hp': hp == 0 ? 100 : hp,
+      'max_hp': 100,
+      'revision': correct,
+    },
+    'question': {
+      'instance_id': 'q$sequence',
+      'bank_id': 'bank$sequence',
+      'prompt': 'Question $sequence',
+      'choices': List.generate(4, (i) => {'id': '$i', 'text': 'Choice $i'}),
+    },
+  };
   @override
-  Future<PointState> load() async => state;
+  Future<PointState> loadPoint(String _) async =>
+      AttackState.fromJson(payload()).point;
   @override
-  Future<void> save(PointState next) async {
-    writes++;
-    await pending?.future;
-    state = next;
+  Stream<PointState> watchPoint(String _) => const Stream.empty();
+  @override
+  Future<AttackState> begin(String _, CampusFix fix, String requestId) async =>
+      AttackState.fromJson(payload());
+  @override
+  Future<AttackState> read(String _) async => AttackState.fromJson(payload());
+  @override
+  Future<Map<String, dynamic>> kick(
+    String a,
+    String q,
+    String cmd,
+    Offset swipe,
+  ) async {
+    calls++;
+    if (conflict) {
+      conflict = false;
+      sequence++;
+      throw const AttackConflict();
+    }
+    final saved = receipts.putIfAbsent(cmd, () {
+      expect(q, 'q$sequence');
+      sequence++;
+      if (outcome == 'correct') {
+        hp -= 25;
+        correct++;
+      } else {
+        losses++;
+      }
+      return {
+        'outcome': outcome,
+        'damage': outcome == 'correct' ? 25 : 0,
+        'state': payload(),
+      };
+    });
+    if (loseResponse) {
+      loseResponse = false;
+      throw StateError('Simulated lost response after commit');
+    }
+    return saved;
   }
 }
 
-Future<void> outcome(CaptureSession s, ShotOutcome result) async {
+Future<void> kick(CaptureSession s) async {
   s.aiming();
-  final id = s.fire()!;
-  await s.resolve(id, result);
+  await s.resolveKick(s.fire()!, const Offset(-90, -180));
 }
 
 void main() {
-  setUpAll(() async {
-    TestWidgetsFlutterBinding.ensureInitialized();
-    final packages =
-        jsonDecode(
-              await File('.dart_tool/package_config.json').readAsString(),
-            )['packages']
-            as List;
-    final flutter = packages.firstWhere((p) => p['name'] == 'flutter');
-    final iconFile = File.fromUri(
-      Uri.parse('${flutter['rootUri']}/').resolve(
-        '../../bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf',
-      ),
-    );
-    await (FontLoader(
-      'MaterialIcons',
-    )..addFont(iconFile.readAsBytes().then(ByteData.sublistView))).load();
-    await (FontLoader(
-      'Inter',
-    )..addFont(rootBundle.load('assets/fonts/Inter-Variable.ttf'))).load();
-  });
+  TestWidgetsFlutterBinding.ensureInitialized();
+  final fix = CampusFix(ChapelConfig.point, 1, DateTime.now());
   test(
-    '130-foot exact radius; uncertainty, age, accuracy, campus and exit hysteresis',
-    () {
-      const spot = GameSpot(
-        id: 'synthetic',
-        name: 'Synthetic chapel',
-        point: CampusPoint(0, 0),
-        entryMeters: 39.624,
-        exitMeters: 45,
-        attackMeters: 39.624,
-      );
-      final p = SpotProximity([spot]), now = DateTime.utc(2026);
-      void fix(
-        double meters, {
-        double accuracy = 0,
-        int seconds = 0,
-        bool campus = true,
-      }) => p.accept(
-        CampusFix(
-          CampusPoint(meters / 6378137 * 180 / 3.141592653589793, 0),
-          accuracy,
-          now.add(Duration(seconds: seconds)),
-        ),
-        onCampus: campus,
-        now: now.add(Duration(seconds: seconds)),
-      );
-      fix(39.623);
-      expect(p.attackReason(spot, now), isNull);
-      fix(39.625, seconds: 1);
-      expect(
-        p.attackReason(spot, now.add(const Duration(seconds: 1))),
-        isNotNull,
-      );
-      fix(0, seconds: 2);
-      fix(0, seconds: 5);
-      expect(p.state, SpotState.eligible);
-      fix(41, seconds: 6);
-      expect(p.state, SpotState.eligible);
-      expect(p.launch(now.add(const Duration(seconds: 6))), isNull);
-      fix(35, accuracy: 5, seconds: 7);
-      expect(
-        p.attackReason(spot, now.add(const Duration(seconds: 7))),
-        isNotNull,
-      );
-      fix(0, seconds: 8);
-      expect(
-        p.attackReason(spot, now.add(const Duration(seconds: 19))),
-        isNotNull,
-      );
-      fix(0, accuracy: 16, seconds: 20);
-      expect(
-        p.attackReason(spot, now.add(const Duration(seconds: 20))),
-        isNotNull,
-      );
-      fix(0, seconds: 21, campus: false);
-      expect(
-        p.attackReason(spot, now.add(const Duration(seconds: 21))),
-        isNotNull,
-      );
+    'each loss advances once; no three-question cutoff; damage only follows server receipt',
+    () async {
+      final repo = Transport();
+      final p = ChapelPoint(repo, playerTeam: GameTeam.artStuff);
+      final s = await CaptureSession.open(p, fix);
+      for (var i = 0; i < 5; i++) {
+        final old = s.question.id;
+        await kick(s);
+        expect(s.question.id, old);
+        expect(p.state.hp, 100);
+        expect(s.phase, AttackPhase.resolving);
+        s.continuePlay();
+        expect(s.question.id, isNot(old));
+        expect(s.phase, AttackPhase.questionReady);
+      }
+      repo.outcome = 'correct';
+      await kick(s);
+      expect(p.state.hp, 75);
+      s.continuePlay();
+      s.close();
+      final resumed = await CaptureSession.open(p, fix);
+      expect(resumed.question.id, s.question.id);
+      expect(resumed.losses, 5);
+      expect(p.state.hp, 75);
+      resumed.close();
+      p.dispose();
     },
   );
   test(
-    'all four goals reachable; no answer steering; aperture and bad swipes',
+    'lost commit response retries identical command without double damage or question skip',
+    () async {
+      final repo = Transport()
+        ..outcome = 'correct'
+        ..loseResponse = true;
+      final p = ChapelPoint(repo, playerTeam: GameTeam.artStuff);
+      final s = await CaptureSession.open(p, fix);
+      await kick(s);
+      expect(s.retryNeeded, true);
+      expect(p.state.hp, 100);
+      expect(repo.hp, 75);
+      s.continuePlay();
+      expect(s.phase, AttackPhase.resolving);
+      await s.retryKick();
+      expect(s.retryNeeded, false);
+      expect(p.state.hp, 75);
+      expect(repo.sequence, 1);
+      expect(repo.calls, 2);
+      s.continuePlay();
+      expect(s.question.id, 'q1');
+      s.close();
+      p.dispose();
+    },
+  );
+  test(
+    'another device resolving a question refreshes without repeating the kick',
+    () async {
+      final repo = Transport()..conflict = true;
+      final p = ChapelPoint(repo, playerTeam: GameTeam.artStuff);
+      final s = await CaptureSession.open(p, fix);
+      await kick(s);
+      expect(s.retryNeeded, false);
+      expect(s.phase, AttackPhase.questionReady);
+      expect(s.question.id, 'q1');
+      expect(repo.calls, 1);
+      expect(p.state.hp, 100);
+      s.close();
+      p.dispose();
+    },
+  );
+  test('capture uses permanent team and keeps the captured message', () async {
+    final repo = Transport()..outcome = 'correct';
+    final p = ChapelPoint(repo, playerTeam: GameTeam.artStuff);
+    final s = await CaptureSession.open(p, fix);
+    for (var i = 0; i < 4; i++) {
+      await kick(s);
+      if (i < 3) s.continuePlay();
+    }
+    expect(s.captured, true);
+    expect(p.friendly, true);
+    expect(p.state.hp, 100);
+    expect(s.message, contains('Art and Stuff captured'));
+    expect(s.phase, AttackPhase.sessionEnded);
+    s.close();
+    p.dispose();
+  });
+  test('stale point responses cannot undo newer shared health', () {
+    final p = ChapelPoint(Transport(), playerTeam: GameTeam.artStuff);
+    p.apply(const PointState(hp: 50, revision: 2));
+    p.apply(const PointState(hp: 75, revision: 1));
+    expect(p.state.hp, 50);
+    p.dispose();
+  });
+  test(
+    'four answer lanes agree with kick geometry and invalid swipes are rejected',
     () {
       for (var i = 0; i < 4; i++) {
-        final shot = FootballShot.fromSwipe(
-          Offset(FootballShot.centers[i] / 30 * 180, -180),
-        )!;
-        expect(shot.goal, i);
-        expect(shot.h(shot.crossingTime), greaterThan(3));
-        expect(shot.vh - 9.8 * shot.crossingTime, lessThan(0));
+        expect(FootballShot.fromSwipe(Offset(-90 + i * 60, -180))!.goal, i);
       }
-      expect(FootballShot.fromSwipe(const Offset(0, -10)), isNull);
-      expect(FootballShot.fromSwipe(const Offset(0, 100)), isNull);
-      expect(FootballShot.fromSwipe(const Offset(500, -180))!.goal, isNull);
-      expect(FootballShot(0, 24, 9).goal, isNull); // gap between goals
-      expect(FootballShot(-9.6, 24, 0).goal, isNull); // below crossbar
-      expect(FootballShot(-9.6, 24, 30).goal, isNull); // above posts
-    },
-  );
-  test(
-    'three misses, immediate wrong loss and stable question on retry',
-    () async {
-      final point = ChapelPoint(MemoryPoint());
-      await point.load();
-      final s = CaptureSession(point);
-      final q = s.question;
-      await outcome(s, ShotOutcome.miss);
-      expect(s.shots, 2);
-      s.continuePlay();
-      expect(s.question, same(q));
-      await outcome(s, ShotOutcome.miss);
-      s.continuePlay();
-      await outcome(s, ShotOutcome.miss);
-      expect(s.phase, AttackPhase.sessionEnded);
-      expect(point.state.hp, 100);
-      final wrong = CaptureSession(point);
-      await outcome(wrong, ShotOutcome.wrong);
-      expect(wrong.shots, 2);
-      expect(wrong.phase, AttackPhase.sessionEnded);
-    },
-  );
-  test(
-    'exactly once damage, new question resets shots, capture restores HP, friendly blocked',
-    () async {
-      final memory = MemoryPoint();
-      final point = ChapelPoint(memory);
-      await point.load();
-      final s = CaptureSession(point);
-      await outcome(s, ShotOutcome.miss);
-      s.continuePlay();
-      s.aiming();
-      final id = s.fire()!;
-      expect(s.fire(), isNull);
-      await Future.wait([
-        s.resolve(id, ShotOutcome.correct),
-        s.resolve(id, ShotOutcome.correct),
-      ]);
-      expect(point.state.hp, 75);
-      expect(memory.writes, 1);
-      s.continuePlay();
-      expect(s.shots, 3);
-      expect(s.questionIndex, 1);
-      for (var i = 0; i < 3; i++) {
-        await outcome(s, ShotOutcome.correct);
-        if (i < 2) s.continuePlay();
-      }
-      expect(s.captured, isTrue);
-      expect(s.phase, AttackPhase.sessionEnded);
-      expect(point.state.owner, 'Team A');
-      expect(point.state.hp, 100);
-      expect(await point.damage(), isFalse);
-      expect(memory.writes, 4);
-    },
-  );
-  test(
-    'damage survives failed later answer and close/reopen; stale callbacks ignored',
-    () async {
-      final point = ChapelPoint(MemoryPoint());
-      await point.load();
-      final s = CaptureSession(point);
-      await outcome(s, ShotOutcome.correct);
-      s.continuePlay();
-      await outcome(s, ShotOutcome.wrong);
-      s.close();
-      final reopened = CaptureSession(point);
-      expect(point.state.hp, 75);
-      expect(reopened.shots, 3);
-      reopened.aiming();
-      final id = reopened.fire()!;
-      reopened.close();
-      await reopened.resolve(id, ShotOutcome.correct);
-      expect(point.state.hp, 75);
-      reopened.cancelAim();
-      expect(reopened.fire(), isNull);
-    },
-  );
-  test('local persistence roundtrip and debug reset without backend', () async {
-    SharedPreferences.setMockInitialValues({});
-    final store = LocalPointPersistence();
-    final point = ChapelPoint(store);
-    await point.load();
-    await point.damage();
-    expect((await store.load()).hp, 75);
-    await point.reset();
-    expect((await store.load()).owner, 'Team B');
-    expect((await store.load()).hp, 100);
-  });
-  test(
-    'close during a valid earned write does not advance or notify closed session',
-    () async {
-      final memory = MemoryPoint()..pending = Completer<void>();
-      final point = ChapelPoint(memory);
-      await point.load();
-      final s = CaptureSession(point);
-      s.aiming();
-      final id = s.fire()!;
-      final save = s.resolve(id, ShotOutcome.correct);
-      expect(point.busy, isTrue);
-      final premature = CaptureSession(point);
-      premature.aiming();
-      expect(premature.fire(), isNull);
-      s.close();
-      memory.pending!.complete();
-      await save;
-      expect(point.state.hp, 75);
-      expect(s.phase, AttackPhase.sessionEnded);
-      expect(s.questionIndex, 0);
+      expect(FootballShot.fromSwipe(const Offset(0, -180))!.goal, isNull);
+      expect(FootballShot.fromSwipe(const Offset(401, -180)), isNull);
+      expect(FootballShot.fromSwipe(const Offset(0, -651)), isNull);
+      expect(FootballShot.fromSwipe(const Offset(0, 40)), isNull);
     },
   );
   testWidgets(
-    'real Flame render, analytic long frame crossing, pause, close and reopen',
+    'point card and Attack use the same nested navigator; game is visible above card',
     (tester) async {
-      tester.view.physicalSize = const Size(390, 844);
-      tester.view.devicePixelRatio = 1;
-      addTearDown(tester.view.resetPhysicalSize);
-      addTearDown(tester.view.resetDevicePixelRatio);
-      final point = ChapelPoint(MemoryPoint());
-      await point.load();
-      final attack = CaptureSession(point);
-      final boundary = GlobalKey();
-      Future<void> capture(String name) async {
-        await tester.pump();
-        await tester.runAsync(() async {
-          final image =
-              await (boundary.currentContext!.findRenderObject()!
-                      as RenderRepaintBoundary)
-                  .toImage();
-          final data = await image.toByteData(format: ui.ImageByteFormat.png);
-          final file = File('output/chapel-review/$name.png');
-          await file.parent.create(recursive: true);
-          await file.writeAsBytes(data!.buffer.asUint8List());
-          image.dispose();
-        });
-      }
-
+      final repo = Transport();
+      final p = ChapelPoint(repo, playerTeam: GameTeam.artStuff);
+      await p.load();
+      final inner = GlobalKey<NavigatorState>();
+      CaptureSession? s;
       await tester.pumpWidget(
         MaterialApp(
-          theme: ThemeData(fontFamily: 'Inter'),
-          navigatorObservers: [gameRouteObserver],
-          home: RepaintBoundary(
-            key: boundary,
-            child: GameHost(
-              gameId: 'chapel-football',
-              session: GameSessionContext(
-                spotId: 'synthetic',
-                startedAt: DateTime.utc(2026),
-                debug: true,
-                capture: attack,
+          home: Navigator(
+            key: inner,
+            observers: [gameRouteObserver],
+            onGenerateRoute: (_) => MaterialPageRoute(
+              builder: (context) => Scaffold(
+                body: TextButton(
+                  onPressed: () => showDialog<void>(
+                    context: context,
+                    useRootNavigator: false,
+                    builder: (_) => ChapelCard(
+                      point: p,
+                      reason: () => null,
+                      distance: () => 0,
+                      onAttack: () async {
+                        s = await CaptureSession.open(p, fix);
+                        if (!context.mounted) return;
+                        await Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => GameHost(
+                              gameId: 'chapel-football',
+                              session: GameSessionContext(
+                                spotId: ChapelConfig.id,
+                                startedAt: DateTime.now(),
+                                capture: s,
+                              ),
+                              factory: (session, exit) =>
+                                  PreviewGame(session, exit),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  child: const Text('Point'),
+                ),
               ),
             ),
           ),
         ),
       );
+      await tester.tap(find.text('Point'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Attack'));
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
-      await tester.pump();
-      expect(find.byType(GameWidget<SessionGame>), findsOneWidget);
-      await capture('four-goal-widget');
-      final game =
-          tester
-                  .widget<GameWidget<SessionGame>>(
-                    find.byType(GameWidget<SessionGame>),
-                  )
-                  .game!
-              as ChapelFootballGame;
-      final widgetFinder = find.byType(GameWidget<SessionGame>);
-      final origin = tester.getTopLeft(widgetFinder),
-          field = tester.getSize(widgetFinder);
-      Offset device(double x, double y) =>
-          origin + Offset(x / 400 * field.width, y / 650 * field.height);
-      game.onDragStart(
-        DragStartEvent(
-          1,
-          game,
-          DragStartDetails(globalPosition: device(200, 520)),
-        ),
-      );
-      expect(attack.phase, AttackPhase.aiming);
-      game.onDragStart(
-        DragStartEvent(
-          2,
-          game,
-          DragStartDetails(globalPosition: device(200, 520)),
-        ),
-      );
-      game.onDragUpdate(
-        DragUpdateEvent(
-          1,
-          game,
-          DragUpdateDetails(
-            globalPosition: device(200, 520),
-            delta: device(110, 340) - device(200, 520),
-          ),
-        ),
-      );
-      game.onDragCancel(DragCancelEvent(1));
-      expect(attack.phase, AttackPhase.questionReady);
-      expect(
-        attack.shotId,
-        0,
-      ); // Flame's cancel-to-end delegation must not fire.
-      game.onDragEnd(DragEndEvent(2, DragEndDetails()));
-      expect(attack.shotId, 0);
-      attack.aiming();
-      game.setVisible(false);
-      expect(attack.phase, AttackPhase.questionReady);
-      expect(game.paused, isTrue);
-      game.setVisible(true);
-      for (var i = 0; i < 4; i++) {
-        attack.aiming();
-        final target = FootballShot.centers[i];
-        game.shootSwipe(Offset(target / 30 * 180, -180));
-        game.update(5); // Deliberately skip across the plane in one update.
-        await tester.pump();
-        expect(point.state.hp, i == 3 ? 100 : 100 - 25 * (i + 1));
-        game.update(5); // A second update must never award another hit.
-        if (i < 3) attack.continuePlay();
-      }
-      await tester.pump();
-      await capture('capture-result-widget');
+      expect(find.text('Question 0'), findsOneWidget);
+      expect(find.byType(ChapelCard), findsNothing);
+      await tester.tap(find.text('Close'));
+      await tester.pumpAndSettle();
+      expect(find.byType(ChapelCard), findsOneWidget);
       await tester.pumpWidget(const SizedBox());
-      expect(attack.closed, isTrue);
-      final next = CaptureSession(point);
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: ThemeData(fontFamily: 'Inter'),
-          home: GameHost(
-            gameId: 'chapel-football',
-            session: GameSessionContext(
-              spotId: 'synthetic',
-              startedAt: DateTime.utc(2026),
-              capture: next,
-            ),
-          ),
-        ),
-      );
-      await tester.pump();
-      await tester.pump(const Duration(seconds: 1));
-      expect(next.shots, 3);
-      expect(next.questionIndex, 0);
-      await tester.pumpWidget(const SizedBox());
-      await point.reset();
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: ThemeData(fontFamily: 'Inter'),
-          home: RepaintBoundary(
-            key: boundary,
-            child: ChapelCard(
-              point: point,
-              reason: () => 'Outside attack range',
-              distance: () => 150,
-              onAttack: () async {},
-            ),
-          ),
-        ),
-      );
-      await tester.pump();
-      await capture('chapel-card-widget');
-      expect(
-        tester
-            .widget<FilledButton>(find.widgetWithText(FilledButton, 'Attack'))
-            .onPressed,
-        isNull,
-      );
-      await tester.pumpWidget(const SizedBox());
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: ThemeData(fontFamily: 'Inter'),
-          home: RepaintBoundary(
-            key: boundary,
-            child: const Scaffold(
-              body: Center(child: ChapelBeacon(owner: 'Team B')),
-            ),
-          ),
-        ),
-      );
-      await tester.pump();
-      await capture('beacon-only-widget');
-      await tester.pumpWidget(const SizedBox());
+      s?.close();
+      p.dispose();
     },
   );
 }

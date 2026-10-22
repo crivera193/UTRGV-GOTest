@@ -82,59 +82,8 @@ class PreviewGame extends SessionGame {
 }
 
 final Map<String, SessionFactory> gameRegistry = Map.unmodifiable({
-  'preview': PreviewGame.new,
   'chapel-football': ChapelFootballGame.new,
 });
-
-/// Reached only through main's kDebugMode guard; uses no account or GPS bypass
-/// in the normal map flow. A landing route gives Close a real destination.
-class DebugPreviewLauncher extends StatefulWidget {
-  const DebugPreviewLauncher({super.key});
-  @override
-  State<DebugPreviewLauncher> createState() => _DebugPreviewLauncherState();
-}
-
-class _DebugPreviewLauncherState extends State<DebugPreviewLauncher> {
-  bool _open = false;
-  Future<void> _launch() async {
-    if (_open) return;
-    setState(() => _open = true);
-    try {
-      await Navigator.of(context).push<GameExit>(
-        MaterialPageRoute(
-          builder: (_) => GameHost(
-            gameId: 'preview',
-            session: GameSessionContext(
-              spotId: 'debug-direct',
-              startedAt: DateTime.now(),
-              debug: true,
-            ),
-          ),
-        ),
-      );
-    } finally {
-      if (mounted) setState(() => _open = false);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      title: const Text('UTRGV-GO'),
-      actions: const [
-        Padding(padding: EdgeInsets.all(12), child: Text('DEBUG ONLY')),
-      ],
-    ),
-    body: SafeArea(
-      child: Center(
-        child: FilledButton(
-          onPressed: _open ? null : _launch,
-          child: const Text('Open game preview · no GPS eligibility'),
-        ),
-      ),
-    ),
-  );
-}
 
 class GameHost extends StatefulWidget {
   const GameHost({
@@ -238,7 +187,7 @@ class _GameHostState extends State<GameHost>
     child: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Text('Unable to load game preview.'),
+        const Text('Unable to load game.'),
         TextButton(onPressed: _retry, child: const Text('Retry')),
       ],
     ),
@@ -288,7 +237,7 @@ class _GameHostState extends State<GameHost>
                       if (widget.session.debug)
                         const Text('DEBUG ONLY · no GPS eligibility'),
                       Text(
-                        'Chapel Point · ${attack.point.state.hp}/${ChapelConfig.maxHp} HP · ${attack.shots} shots',
+                        'Chapel Point · ${attack.point.state.hp}/${attack.point.state.maxHp} HP · ${attack.correct} correct · ${attack.losses} losses',
                         style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                       Text(
@@ -298,7 +247,14 @@ class _GameHostState extends State<GameHost>
                       ),
                       Text(attack.message, textAlign: TextAlign.center),
                       if (attack.busy) const LinearProgressIndicator(),
-                      if (attack.phase == AttackPhase.resolving && !attack.busy)
+                      if (attack.retryNeeded && !attack.busy)
+                        FilledButton(
+                          onPressed: attack.retryKick,
+                          child: const Text('Retry saved kick'),
+                        ),
+                      if (attack.phase == AttackPhase.resolving &&
+                          !attack.busy &&
+                          !attack.retryNeeded)
                         FilledButton(
                           onPressed: attack.continuePlay,
                           child: const Text('Continue'),

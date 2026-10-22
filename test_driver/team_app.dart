@@ -6,6 +6,10 @@ import 'package:campus_app/screens/main_screen.dart';
 import 'package:campus_app/teams/team_membership.dart';
 import 'package:campus_app/games/chapel_capture.dart';
 import 'package:campus_app/games/game_host.dart';
+import 'package:campus_app/games/chapel_card.dart';
+import 'package:campus_app/games/live_attack_repository.dart';
+import 'package:campus_app/map/campus_geography.dart';
+import 'package:campus_app/map/campus_location.dart';
 import 'package:campus_app/widgets/mapbox_configuration_notice.dart';
 import 'package:flame/game.dart';
 import 'package:flutter/foundation.dart';
@@ -78,25 +82,50 @@ Future<void> main() async {
           if (TeamScope.of(main).team == null) {
             throw StateError('Membership required');
           }
+          point?.dispose();
           point = ChapelPoint(
-            LocalPointPersistence(key: 'team_e2e_chapel_$runId'),
+            SupabaseAttackRepository(client),
+            playerTeam: TeamScope.of(main).team!,
+            spotId: 'qa-live-attacks-20261022',
           );
           await point!.load();
-          attack = CaptureSession(point!);
-          Navigator.of(main).push<GameExit>(
-            MaterialPageRoute(
-              builder: (_) => GameHost(
-                gameId: 'chapel-football',
-                session: GameSessionContext(
-                  spotId: ChapelConfig.id,
-                  startedAt: DateTime.now(),
-                  debug: true,
-                  capture: attack,
-                ),
-              ),
+          if (point!.error != null) throw StateError(point!.error!);
+          showDialog<void>(
+            context: main,
+            useRootNavigator: false,
+            builder: (_) => ChapelCard(
+              point: point!,
+              reason: () => null,
+              distance: () => 0,
+              onAttack: () async {
+                attack = await CaptureSession.open(
+                  point!,
+                  CampusFix(
+                    const CampusPoint(0, 0),
+                    0,
+                    DateTime.now().subtract(const Duration(milliseconds: 500)),
+                  ),
+                );
+                if (!main.mounted) return;
+                await Navigator.of(main).push<GameExit>(
+                  MaterialPageRoute(
+                    builder: (_) => GameHost(
+                      gameId: 'chapel-football',
+                      session: GameSessionContext(
+                        spotId: point!.spotId,
+                        startedAt: DateTime.now(),
+                        capture: attack,
+                      ),
+                    ),
+                  ),
+                );
+              },
             ),
           );
-          return 'opened isolated chapel game; no GPS eligibility asserted';
+          return jsonEncode({
+            'opened': 'live QA point card',
+            'hp': point!.state.hp,
+          });
         case 'swipe':
           final element = ft.find
               .byType(GameWidget<SessionGame>)
@@ -119,7 +148,12 @@ Future<void> main() async {
         case 'game':
           return jsonEncode({
             'phase': attack?.phase.name,
-            'shots': attack?.shots,
+            'losses': attack?.losses,
+            'correct': attack?.correct,
+            'attack_id': attack?.attackId,
+            'question_id': attack?.question.id,
+            'bank_id': attack?.question.bankId,
+            'answers': attack?.question.answers,
             'hp': point?.state.hp,
             'message': attack?.message,
           });

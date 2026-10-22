@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import '../map/campus_geography.dart';
 import 'chapel_capture.dart';
 
@@ -41,17 +40,4 @@ const chapelSpot = GameSpot(
   attackMeters: ChapelConfig.attackMeters,
 );
 const productionGameSpots = <GameSpot>[chapelSpot];
-const debugGameSpotsEnabled =
-    kDebugMode && bool.fromEnvironment('GAME_SPOTS_DEMO');
-// Reuses the legacy fountain record, NOT a verified safe outdoor destination.
-// Only for developer demonstration; never included in release/profile builds.
-const debugDemoSpot = GameSpot(
-  id: 'debug-fountain-preview',
-  name: 'DEBUG ONLY · fountain demonstration (unverified)',
-  point: ChapelConfig.debugPoint,
-);
-
-List<GameSpot> get configuredGameSpots => [
-  ...productionGameSpots,
-  if (debugGameSpotsEnabled) debugDemoSpot,
-];
+List<GameSpot> get configuredGameSpots => productionGameSpots;

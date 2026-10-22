@@ -127,7 +127,7 @@ void main() {
       load.completeError(StateError('synthetic loading failure'));
       await tester.pump();
       await tester.pump();
-      expect(find.text('Unable to load game preview.'), findsOneWidget);
+      expect(find.text('Unable to load game.'), findsOneWidget);
       tester
           .widget<TextButton>(find.widgetWithText(TextButton, 'Retry'))
           .onPressed!();
@@ -136,7 +136,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 100));
       expect(games, hasLength(2));
       expect(games.first.disposed, isTrue);
-      expect(find.text('Unable to load game preview.'), findsNothing);
+      expect(find.text('Unable to load game.'), findsNothing);
       await tester.pumpWidget(const SizedBox());
       expect(games.last.disposed, isTrue);
     },
