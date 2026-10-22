@@ -69,6 +69,7 @@ flutter:
     - assets/campus/
     - assets/player/cowboy/
     - assets/auth/
+    - assets/teams/
     - assets/animations/kitty-island/
     - assets/animations/campus-creatures/
   fonts:

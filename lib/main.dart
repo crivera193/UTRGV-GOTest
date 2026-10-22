@@ -37,7 +37,12 @@ class CampusApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) => MaterialApp(
     title: 'UTRGV-GO',
-    navigatorObservers: [gameRouteObserver],
+    navigatorObservers:
+        kDebugMode &&
+            (const bool.fromEnvironment('CHAPEL_PREVIEW') ||
+                const bool.fromEnvironment('GAME_PREVIEW'))
+        ? [gameRouteObserver]
+        : const [],
     debugShowCheckedModeBanner: false,
     theme: ThemeData(
       useMaterial3: true,

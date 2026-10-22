@@ -3,6 +3,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../screens/main_screen.dart';
 import 'login_screen.dart';
 import 'student_email.dart';
+import '../teams/team_gate.dart';
+import '../teams/team_membership.dart';
 
 class AuthGate extends StatelessWidget {
   const AuthGate({super.key});
@@ -27,7 +29,10 @@ class AuthGate extends StatelessWidget {
           );
         }
         final user =
-            (snapshot.data?.session ?? client.auth.currentSession)?.user;
+            (snapshot.hasData
+                    ? snapshot.data?.session
+                    : client.auth.currentSession)
+                ?.user;
         if (user == null) return const LoginScreen();
         if (!StudentEmail.isEligible(user.email ?? '')) {
           return Scaffold(
@@ -52,7 +57,12 @@ class AuthGate extends StatelessWidget {
             ),
           );
         }
-        return const MainScreen();
+        return TeamGate(
+          key: ValueKey(user.id),
+          repository: SupabaseTeamRepository(client, user.id),
+          onSignOut: client.auth.signOut,
+          child: const MainScreen(),
+        );
       },
     );
   }

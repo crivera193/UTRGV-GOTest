@@ -4,6 +4,7 @@ The former social-events product has been removed in place. The app is named UTR
 
 ## Current scope
 
+- Permanent team onboarding now gates authenticated teamless accounts before the map. The three game teams are Health and Science (blue), Math and Engineering (red), and Art and Stuff (yellow). Implementation, live migration/security checks and visual-review limits: [team onboarding](docs/team-onboarding.md).
 - Email/password accounts restricted to .edu addresses, without email verification (all .edu domains, not only UTRGV).
 - Clean account screens and a custom campus-only Mapbox map with opt-in GPS.
 - No events, factions, friends, event moderation, social notifications, Bon/Sparky branding or demo XP.
@@ -45,7 +46,7 @@ Android/iOS platform identifiers/signing were not changed. Android release still
 
 ## Repository and branches
 
-Private repository: https://github.com/crivera193/UTRGV-GO . Use crivera193 only; never Nayster/TheNayster. Owner authorized source pushes and the following tracking branches:
+Private repository: https://github.com/crivera193/UTRGV-GOTest . Use crivera193 only; never Nayster/TheNayster. Owner authorized source pushes and the following tracking branches:
 
 - main: integrated independent app baseline.
 - codex/campus-map: campus geography, camera constraints and location behavior.

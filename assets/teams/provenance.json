@@ -1,0 +1,42 @@
+{
+  "hat_source": "SourceArt\\human-cowboy\\v010-hat-only\\Cowboy_Hat.blend",
+  "source_sha256": "591c0634510d4e8fd689e7e84c080ee6b7d214eec7690718c69f60beef1ad10e",
+  "source_unchanged": true,
+  "source_inventory": [
+    {
+      "name": "Key",
+      "type": "LIGHT"
+    },
+    {
+      "name": "Fill",
+      "type": "LIGHT"
+    },
+    {
+      "name": "Rim",
+      "type": "LIGHT"
+    },
+    {
+      "name": "Cowboy Hat",
+      "type": "MESH"
+    },
+    {
+      "name": "Human_Cowboy Review Camera",
+      "type": "CAMERA"
+    }
+  ],
+  "hat_materials_preserved": [
+    "Human Cowboy Reference Colors",
+    "Dark felt interior"
+  ],
+  "blender": "5.2.2 LTS",
+  "hat_size": [
+    512,
+    384
+  ],
+  "pedestal_size": [
+    256,
+    448
+  ],
+  "pipeline": "Isolated background Blender; shared neutral hat sprite, original geometric stone pedestal; Flame draws team illumination.",
+  "reference_use": "Arrangement and stone-column mood only; no reference pixels used."
+}
