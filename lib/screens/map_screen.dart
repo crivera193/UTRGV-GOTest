@@ -788,6 +788,7 @@ class _MapScreenState extends State<MapScreen>
       return _chapel.error ?? 'Loading live point…';
     }
     if (_chapel.error != null) return _chapel.error;
+    if (_chapel.cooldownReason != null) return _chapel.cooldownReason;
     if (_location?.state != CampusGpsState.onCampus) {
       return 'Enable GPS and move safely onto campus.';
     }

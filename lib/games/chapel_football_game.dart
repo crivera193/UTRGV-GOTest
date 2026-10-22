@@ -99,7 +99,11 @@ class ChapelFootballGame extends SessionGame with DragCallbacks {
   void update(double dt) {
     super.update(dt);
     final shot = _shot;
-    if (shot == null || attack.closed) return;
+    if (shot == null || attack.closed || attack.busy) return;
+    if (attack.phase != AttackPhase.flying) {
+      _shot = null;
+      return;
+    }
     _time += dt;
     // Analytic plane crossing: a long frame cannot skip a goal.
     if (_time >= shot.crossingTime) {
@@ -306,8 +310,8 @@ class ChapelFootballGame extends SessionGame with DragCallbacks {
       text(
         c,
         attack.captured
-            ? '◆ ${attack.point.playerTeam.displayName}\nChapel Point · ${attack.point.state.hp} HP\nSaved online'
-            : 'Earned damage is saved.\nReturn to the map to try again.',
+            ? '◆ ${attack.point.playerTeam.displayName}\nChapel Point · ${attack.point.state.healthLabel} health\nSaved online'
+            : '${attack.correct}/4 correct · ${attack.damagePercent}% damage\nSaved online. Return to the map.',
         const Rect.fromLTWH(55, 455, 290, 65),
         font: 17,
       );

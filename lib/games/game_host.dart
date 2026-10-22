@@ -141,7 +141,12 @@ class _GameHostState extends State<GameHost>
     _sync();
   }
 
-  void _sync() => _game?.setVisible(_foreground && _visible && !_closing);
+  void _sync() {
+    final visible = _foreground && _visible && !_closing;
+    _game?.setVisible(visible);
+    widget.session.capture?.setVisible(visible);
+  }
+
   @override
   void didPushNext() {
     _visible = false;
@@ -237,8 +242,14 @@ class _GameHostState extends State<GameHost>
                       if (widget.session.debug)
                         const Text('DEBUG ONLY · no GPS eligibility'),
                       Text(
-                        'Chapel Point · ${attack.point.state.hp}/${attack.point.state.maxHp} HP · ${attack.correct} correct · ${attack.losses} losses',
+                        'Chapel Point · ${attack.point.state.healthLabel} health',
                         style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      Text(
+                        attack.phase == AttackPhase.sessionEnded
+                            ? '${attack.correct}/4 correct · ${attack.damagePercent}% damage'
+                            : 'Question ${attack.questionNumber}/4 · ${attack.secondsRemaining}s',
+                        key: const ValueKey('attack-timer'),
                       ),
                       Text(
                         attack.question.prompt,
@@ -251,13 +262,6 @@ class _GameHostState extends State<GameHost>
                         FilledButton(
                           onPressed: attack.retryKick,
                           child: const Text('Retry saved kick'),
-                        ),
-                      if (attack.phase == AttackPhase.resolving &&
-                          !attack.busy &&
-                          !attack.retryNeeded)
-                        FilledButton(
-                          onPressed: attack.continuePlay,
-                          child: const Text('Continue'),
                         ),
                       if (attack.phase == AttackPhase.sessionEnded)
                         FilledButton(

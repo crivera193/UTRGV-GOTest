@@ -86,7 +86,7 @@ Future<void> main() async {
           point = ChapelPoint(
             SupabaseAttackRepository(client),
             playerTeam: TeamScope.of(main).team!,
-            spotId: 'qa-live-attacks-20261022',
+            spotId: 'qa-timed-native-v2-20261022',
           );
           await point!.load();
           if (point!.error != null) throw StateError(point!.error!);
@@ -125,7 +125,16 @@ Future<void> main() async {
           return jsonEncode({
             'opened': 'live QA point card',
             'hp': point!.state.hp,
+            'can_resume': point!.canResume,
+            'cooldown': point!.cooldownSeconds,
           });
+        case 'read_attack':
+          return jsonEncode(
+            await client.rpc(
+              'read_point_attack',
+              params: {'attack_id': data['attack_id']},
+            ),
+          );
         case 'swipe':
           final element = ft.find
               .byType(GameWidget<SessionGame>)
@@ -150,6 +159,12 @@ Future<void> main() async {
             'phase': attack?.phase.name,
             'losses': attack?.losses,
             'correct': attack?.correct,
+            'question_number': attack?.questionNumber,
+            'seconds': attack?.secondsRemaining,
+            'damage_percent': attack?.damagePercent,
+            'owner': point?.state.ownerTeamId,
+            'cooldown': point?.cooldownSeconds,
+            'can_resume': point?.canResume,
             'attack_id': attack?.attackId,
             'question_id': attack?.question.id,
             'bank_id': attack?.question.bankId,

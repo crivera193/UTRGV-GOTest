@@ -2,19 +2,19 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_driver/flutter_driver.dart';
 
-void check(bool v, String m) {
-  if (!v) throw StateError(m);
+void check(bool value, String message) {
+  if (!value) throw StateError(message);
 }
 
 Future<void> main(List<String> args) async {
-  final d = await FlutterDriver.connect(
+  final driver = await FlutterDriver.connect(
     dartVmServiceUrl: Platform.environment['TEAM_VM_URL'],
   );
-  final out = Directory('output/team-e2e/live')..createSync(recursive: true);
+  final out = Directory('output/team-e2e/timed')..createSync(recursive: true);
   Future<dynamic> cmd(String op, [Map<String, dynamic> more = const {}]) async {
-    final value = await d.requestData(
+    final value = await driver.requestData(
       jsonEncode({'op': op, ...more}),
-      timeout: const Duration(seconds: 55),
+      timeout: const Duration(seconds: 30),
     );
     try {
       return jsonDecode(value);
@@ -23,57 +23,67 @@ Future<void> main(List<String> args) async {
     }
   }
 
-  Future<void> tap(String text) async {
-    await d.scrollIntoView(
-      find.text(text),
-      timeout: const Duration(seconds: 15),
-    );
-    await d.tap(find.text(text));
-  }
-
-  Future<void> screen(String name) async {
-    await File('${out.path}/$name.png').writeAsBytes(await d.screenshot());
+  Future<void> capture(String name) async =>
+      File('${out.path}/$name.png').writeAsBytes(await driver.screenshot());
+  Future<Map> gameWhere(bool Function(Map) predicate) async {
+    final until = DateTime.now().add(const Duration(seconds: 25));
+    while (DateTime.now().isBefore(until)) {
+      final game = await cmd('game') as Map;
+      if (predicate(game)) return game;
+      await Future<void>.delayed(const Duration(milliseconds: 150));
+    }
+    throw StateError('Timed game did not reach expected state');
   }
 
   try {
-    await d.runUnsynchronized(() async {
+    await driver.runUnsynchronized(() async {
       final info = await cmd('inspect');
-      stdout.writeln(jsonEncode(info));
-      check(info['user'] != null, 'Existing synthetic login required');
-      check(
-        info['ui_team'] != null,
-        'Permanent team must load without onboarding',
-      );
-      await cmd('play');
-      await tap('Attack');
-      await d.waitFor(
-        find.text('Swipe forward from the football. Aim for your answer.'),
-        timeout: const Duration(seconds: 55),
-      );
-      var g = await cmd('game');
-      stdout.writeln(jsonEncode(g));
-      await screen('open');
+      check(info['ui_team'] == 'art_stuff', 'Permanent team not restored');
+      final point = await cmd('play');
       if (args.first == 'prepare') {
-        // Real pointer miss must consume the current question, even after >3 losses.
-        final before = g;
-        await cmd('swipe', {'dx': 0, 'dy': -180});
-        await d.waitFor(
-          find.text('Miss. No damage. Next question.'),
-          timeout: const Duration(seconds: 55),
+        check(point['cooldown'] == 0, 'QA point already used');
+        await driver.scrollIntoView(find.text('Attack'));
+        await driver.tap(find.text('Attack'));
+        var game = await gameWhere(
+          (g) => g['question_number'] == 1 && g['phase'] == 'questionReady',
         );
-        await tap('Continue');
-        g = await cmd('game');
         check(
-          g['question_id'] != before['question_id'],
-          'Miss did not advance',
+          (game['seconds'] as int) > 0 && (game['seconds'] as int) <= 15,
+          'Missing live timer',
         );
-        check(g['hp'] == before['hp'], 'Miss damaged point');
+        await capture('timer-question-one');
+        game = await gameWhere(
+          (g) =>
+              g['losses'] == 1 &&
+              g['question_number'] == 2 &&
+              g['phase'] == 'questionReady',
+        );
+        check(game['hp'] == 100, 'Timeout caused damage');
+        await capture('automatic-timeout');
+        final answers = {
+          'qa-live-add': '4',
+          'qa-live-shape': '3',
+          'qa-live-light': 'Red',
+          'qa-live-safe': 'Safe outdoor path',
+        };
+        final lane = (game['answers'] as List).indexOf(
+          answers[game['bank_id']],
+        );
+        check(lane >= 0, 'Missing QA choice');
+        await cmd('swipe', {'dx': -90 + lane * 60, 'dy': -180});
+        game = await gameWhere(
+          (g) =>
+              g['correct'] == 1 &&
+              g['question_number'] == 3 &&
+              g['phase'] == 'questionReady',
+        );
+        check(game['hp'] == 93.75, 'Correct kick did not remove exactly 6.25%');
         await File(
           '${out.path}/before-close.json',
-        ).writeAsString(jsonEncode(g));
-        await screen('before-close');
+        ).writeAsString(jsonEncode(game));
+        await capture('fractional-damage');
         stdout.writeln(
-          'PASS: actual card > Attack > pointer miss > next question',
+          'PASS: native timer auto-advanced; real pointer kick dealt exactly 6.25%; next timed question loaded automatically.',
         );
       } else {
         final before =
@@ -81,62 +91,37 @@ Future<void> main(List<String> args) async {
                   await File('${out.path}/before-close.json').readAsString(),
                 )
                 as Map;
+        check(point['hp'] == 93.75, 'Cold launch lost earned damage');
+        check(point['can_resume'] == false, 'Expired questions restarted');
+        check((point['cooldown'] as int) > 0, 'Cold launch bypassed cooldown');
+        final state = await cmd('read_attack', {
+          'attack_id': before['attack_id'],
+        });
         check(
-          g['attack_id'] == before['attack_id'],
-          'Cold launch rerolled attack',
+          state['sequence'] == 4 && state['status'] == 'completed',
+          'Offline questions did not expire',
         );
         check(
-          g['question_id'] == before['question_id'],
-          'Cold launch rerolled question',
+          state['correct_count'] == 1 && state['timeout_count'] == 3,
+          'Offline timeout totals incorrect',
         );
-        check(g['hp'] == before['hp'], 'Cold launch lost damage');
-        final answers = {
-          'qa-live-add': '4',
-          'qa-live-shape': '3',
-          'qa-live-light': 'Red',
-          'qa-live-safe': 'Safe outdoor path',
-        };
-        final lane = (g['answers'] as List).indexOf(answers[g['bank_id']]);
-        check(lane >= 0, 'QA answer missing');
-        await cmd('swipe', {'dx': -90 + lane * 60, 'dy': -180});
-        await d.waitFor(
-          find.text('Continue'),
-          timeout: const Duration(seconds: 55),
+        final text = await driver.getText(
+          find.byValueKey('point-attack-reason'),
         );
-        final after = await cmd('game');
         check(
-          after['hp'] == (g['hp'] as int) - 25,
-          'Correct pointer kick failed to damage live point',
+          text.startsWith('Attack available in '),
+          'Cooldown missing from point card',
         );
-        await screen('correct-saved');
-        await tap('Continue');
-        final next = await cmd('game');
-        final nextLane = (next['answers'] as List).indexOf(
-          answers[next['bank_id']],
-        );
-        await cmd('swipe', {'dx': -90 + nextLane * 60, 'dy': -180});
-        await d.waitFor(
-          find.text('Capture complete · Return to map'),
-          timeout: const Duration(seconds: 55),
-        );
-        final captured = await cmd('game');
-        check(
-          captured['hp'] == 100 && captured['phase'] == 'sessionEnded',
-          'Capture failed',
-        );
-        await screen('captured-online');
+        await capture('cold-relaunch-cooldown');
         await File(
           '${out.path}/after-reopen.json',
-        ).writeAsString(jsonEncode(after));
-        await tap('Close');
-        await d.waitFor(find.text('Attack'));
-        await screen('back-to-card');
+        ).writeAsString(jsonEncode(state));
         stdout.writeln(
-          'PASS: cold restart preserved team/attack/question/HP; actual correct pointer kick saved 25 damage and returned to card',
+          'PASS: COLD restart preserved team/6.25% damage, counted all three unanswered questions as losses, and kept the per-point cooldown.',
         );
       }
     });
   } finally {
-    await d.close();
+    await driver.close();
   }
 }

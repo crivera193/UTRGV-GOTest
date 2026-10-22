@@ -11,9 +11,13 @@ abstract final class ChapelConfig {
   static const point = CampusPoint(-98.174683, 26.305357);
   static const description =
       'Play from a safe outdoor path or the chapel lawn; never enter the building to play.';
-  static const maxHp = 100, damage = 25;
+  static const maxHp = 100, questionsPerAttack = 4;
+  static const questionSeconds = 15, cooldownMinutes = 10;
   static const attackMeters = 39.624;
 }
+
+String healthText(num value) =>
+    value.toStringAsFixed(2).replaceFirst(RegExp(r'\.?0+$'), '');
 
 String attackCommandId() {
   final r = Random.secure();
@@ -52,12 +56,15 @@ class PointState {
   });
   factory PointState.fromJson(Map<String, dynamic> j) => PointState(
     ownerTeamId: j['owner_team_id'] as String?,
-    hp: j['hp'] as int,
+    hp: (j['hp'] as num).toDouble(),
     maxHp: j['max_hp'] as int,
     revision: j['revision'] as int,
   );
   final String? ownerTeamId;
-  final int hp, maxHp, revision;
+  final double hp;
+  final int maxHp, revision;
+  double get healthPercent => hp / maxHp * 100;
+  String get healthLabel => '${healthText(healthPercent)}%';
   String get owner => ownerTeamId == null
       ? 'Unclaimed'
       : GameTeam.fromId(ownerTeamId!).displayName;
@@ -69,13 +76,24 @@ class AttackState {
       status = j['status'] as String,
       sequence = j['sequence'] as int,
       correct = j['correct_count'] as int,
-      losses = (j['wrong_count'] as int) + (j['miss_count'] as int),
+      losses =
+          (j['wrong_count'] as int) +
+          (j['miss_count'] as int) +
+          (j['timeout_count'] as int),
+      damageDealt = (j['damage_dealt'] as num).toDouble(),
+      serverNow = DateTime.parse(j['server_now'] as String),
+      cooldownUntil = DateTime.parse(j['cooldown_until'] as String),
+      dueAt = DateTime.parse((j['question'] as Map)['due_at'] as String),
+      lastOutcome = j['last_outcome'] as String?,
       point = PointState.fromJson(Map<String, dynamic>.from(j['point'] as Map)),
       question = QuizQuestion.fromJson(
         Map<String, dynamic>.from(j['question'] as Map),
       );
   final String id, status;
   final int sequence, correct, losses;
+  final double damageDealt;
+  final DateTime serverNow, cooldownUntil, dueAt;
+  final String? lastOutcome;
   final PointState point;
   final QuizQuestion question;
   bool get active => status == 'active';
@@ -85,8 +103,27 @@ class AttackConflict implements Exception {
   const AttackConflict();
 }
 
+class AttackAccess {
+  const AttackAccess({
+    required this.serverNow,
+    required this.cooldownUntil,
+    required this.canResume,
+  });
+  factory AttackAccess.fromJson(Map<String, dynamic> json) => AttackAccess(
+    serverNow: DateTime.parse(json['server_now'] as String),
+    cooldownUntil: json['cooldown_until'] == null
+        ? null
+        : DateTime.parse(json['cooldown_until'] as String),
+    canResume: json['can_resume'] as bool,
+  );
+  final DateTime serverNow;
+  final DateTime? cooldownUntil;
+  final bool canResume;
+}
+
 abstract interface class AttackRepository {
   Future<PointState> loadPoint(String spotId);
+  Future<AttackAccess> access(String spotId);
   Stream<PointState> watchPoint(String spotId);
   Future<AttackState> begin(String spotId, CampusFix fix, String requestId);
   Future<AttackState> read(String attackId);
@@ -111,6 +148,32 @@ class ChapelPoint extends ChangeNotifier {
   bool loaded = false, busy = false, _disposed = false;
   String? error;
   StreamSubscription<PointState>? _subscription;
+  AttackAccess? _access;
+  final _accessClock = Stopwatch();
+  bool get canResume => _access?.canResume ?? false;
+  int get cooldownSeconds {
+    final access = _access;
+    if (access == null || access.cooldownUntil == null) return 0;
+    return ((access.cooldownUntil!.difference(access.serverNow).inMilliseconds -
+                _accessClock.elapsedMilliseconds) /
+            1000)
+        .ceil()
+        .clamp(0, 600);
+  }
+
+  String? get cooldownReason {
+    if (canResume || cooldownSeconds == 0) return null;
+    final seconds = cooldownSeconds;
+    return 'Attack available in ${seconds ~/ 60}:${(seconds % 60).toString().padLeft(2, '0')}';
+  }
+
+  void applyAccess(AttackAccess access) {
+    _access = access;
+    _accessClock
+      ..reset()
+      ..start();
+  }
+
   bool get friendly => state.ownerTeamId == playerTeam.id;
   void apply(PointState next) {
     if (_disposed) return;
@@ -122,8 +185,13 @@ class ChapelPoint extends ChangeNotifier {
 
   Future<void> load() async {
     try {
-      final next = await repository.loadPoint(spotId);
+      final results = await Future.wait<Object>([
+        repository.loadPoint(spotId),
+        repository.access(spotId),
+      ]);
+      final next = results[0] as PointState;
       if (_disposed) return;
+      applyAccess(results[1] as AttackAccess);
       apply(next);
       _subscription ??= repository
           .watchPoint(spotId)
@@ -154,6 +222,7 @@ class ChapelPoint extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    _accessClock.stop();
     unawaited(_subscription?.cancel());
     super.dispose();
   }
@@ -162,11 +231,19 @@ class ChapelPoint extends ChangeNotifier {
 enum AttackPhase { questionReady, aiming, flying, resolving, sessionEnded }
 
 class CaptureSession extends ChangeNotifier {
-  CaptureSession._(this.point, this._state) : _question = _state.question {
-    if (!_state.active) {
-      phase = AttackPhase.sessionEnded;
-      message = 'This attack has ended. Return to the map.';
-    }
+  CaptureSession._(this.point, this._state) {
+    _accept(_state);
+    _timer = Timer.periodic(const Duration(milliseconds: 250), (_) {
+      if (closed) return;
+      notifyListeners();
+      if (_visible &&
+          secondsRemaining == 0 &&
+          !busy &&
+          !retryNeeded &&
+          _state.active) {
+        unawaited(refresh());
+      }
+    });
   }
   static Future<CaptureSession> open(
     ChapelPoint point,
@@ -182,7 +259,6 @@ class CaptureSession extends ChangeNotifier {
         requestId ?? attackCommandId(),
       );
       final current = await point.repository.read(started.id);
-      point.apply(current.point);
       return CaptureSession._(point, current);
     } finally {
       point._busy(false);
@@ -191,20 +267,97 @@ class CaptureSession extends ChangeNotifier {
 
   final ChapelPoint point;
   AttackState _state;
-  QuizQuestion _question;
-  QuizQuestion get question => _question;
+  final _clock = Stopwatch();
+  Timer? _timer;
+  bool _visible = true;
+  QuizQuestion get question => _state.question;
   String get attackId => _state.id;
   int get correct => _state.correct;
   int get losses => _state.losses;
+  int get questionNumber => (_state.sequence + 1).clamp(1, 4);
+  String get damagePercent =>
+      healthText(_state.damageDealt / point.state.maxHp * 100);
+  int get secondsRemaining =>
+      ((_state.dueAt.difference(_state.serverNow).inMilliseconds -
+                  _clock.elapsedMilliseconds) /
+              1000)
+          .ceil()
+          .clamp(0, 15);
   AttackPhase phase = AttackPhase.questionReady;
   int shotId = 0;
   bool closed = false, busy = false, retryNeeded = false;
   bool get captured => _state.status == 'captured';
-  String message = 'Swipe forward from the football. Aim for your answer.';
-  String? _command;
+  String message = 'Kick toward your answer before the timer ends.';
+  String? _command, _commandQuestion;
   Offset? _swipe;
+  void _accept(AttackState next) {
+    final keepFlight =
+        phase == AttackPhase.flying &&
+        _state.question.id == next.question.id &&
+        next.active;
+    _state = next;
+    _clock
+      ..reset()
+      ..start();
+    point.applyAccess(
+      AttackAccess(
+        serverNow: next.serverNow,
+        cooldownUntil: next.cooldownUntil,
+        canResume: next.active,
+      ),
+    );
+    point.apply(next.point);
+    phase = keepFlight
+        ? AttackPhase.flying
+        : next.active
+        ? AttackPhase.questionReady
+        : AttackPhase.sessionEnded;
+    if (!next.active && !captured) {
+      message =
+          'Attempt complete. $correct/4 correct · $damagePercent% damage saved.';
+    }
+  }
+
+  void setVisible(bool visible) {
+    final returning = visible && !_visible;
+    _visible = visible;
+    if (returning && !closed) unawaited(refresh());
+  }
+
+  Future<void> refresh() async {
+    if (closed || busy) return;
+    if (_command != null) {
+      await retryKick();
+      return;
+    }
+    busy = true;
+    notifyListeners();
+    final previousSequence = _state.sequence;
+    try {
+      final next = await point.repository.read(_state.id);
+      if (closed) return;
+      _accept(next);
+      if (next.active && next.sequence > previousSequence) {
+        message = 'Time expired. No damage. Next question.';
+      }
+      retryNeeded = false;
+    } catch (_) {
+      if (!closed) {
+        retryNeeded = true;
+        message = 'Reconnect to check the timer and saved progress.';
+      }
+    } finally {
+      busy = false;
+      if (!closed) notifyListeners();
+    }
+  }
+
   void aiming() {
-    if (!closed && phase == AttackPhase.questionReady) {
+    if (!closed &&
+        !busy &&
+        !retryNeeded &&
+        secondsRemaining > 0 &&
+        phase == AttackPhase.questionReady) {
       phase = AttackPhase.aiming;
       notifyListeners();
     }
@@ -218,7 +371,12 @@ class CaptureSession extends ChangeNotifier {
   }
 
   int? fire() {
-    if (closed || phase != AttackPhase.aiming) return null;
+    if (closed ||
+        busy ||
+        secondsRemaining == 0 ||
+        phase != AttackPhase.aiming) {
+      return null;
+    }
     phase = AttackPhase.flying;
     notifyListeners();
     return ++shotId;
@@ -227,59 +385,65 @@ class CaptureSession extends ChangeNotifier {
   Future<void> resolveKick(int id, Offset swipe) async {
     if (closed || phase != AttackPhase.flying || id != shotId) return;
     _command = attackCommandId();
+    _commandQuestion = question.id;
     _swipe = swipe;
     phase = AttackPhase.resolving;
     await retryKick();
   }
 
   Future<void> retryKick() async {
-    if (closed || busy || _command == null || _swipe == null) return;
+    if (closed || busy) return;
+    if (_command == null) {
+      retryNeeded = false;
+      await refresh();
+      return;
+    }
     busy = true;
     retryNeeded = false;
     notifyListeners();
     try {
       final receipt = await point.repository.kick(
         _state.id,
-        _question.id,
+        _commandQuestion!,
         _command!,
         _swipe!,
       );
-      final next = AttackState.fromJson(
+      final snapshot = AttackState.fromJson(
         Map<String, dynamic>.from(receipt['state'] as Map),
       );
-      final current = await point.repository.read(next.id);
-      point.apply(current.point);
+      final current = await point.repository.read(snapshot.id);
       if (closed) return;
-      _state = current;
-      message = receipt['outcome'] == 'correct'
-          ? captured
-                ? '${point.playerTeam.displayName} captured the point!'
-                : 'Correct! −${receipt['damage']} HP. Saved online.'
-          : receipt['outcome'] == 'wrong'
-          ? 'Wrong answer. No damage. Next question.'
-          : 'Miss. No damage. Next question.';
+      _accept(current);
+      final outcome = receipt['outcome'];
+      if (captured) {
+        message = '${point.playerTeam.displayName} captured the point!';
+      } else if (current.active) {
+        message = outcome == 'correct'
+            ? 'Correct! ${healthText(receipt['damage'] as num)} HP damage saved. Next question.'
+            : outcome == 'timeout'
+            ? 'Time expired. No damage. Next question.'
+            : outcome == 'wrong'
+            ? 'Wrong answer. No damage. Next question.'
+            : 'Miss. No damage. Next question.';
+      }
       _command = null;
+      _commandQuestion = null;
       _swipe = null;
-      if (!_state.active) phase = AttackPhase.sessionEnded;
     } catch (error) {
       if (!closed && error is AttackConflict) {
         try {
           final current = await point.repository.read(_state.id);
-          point.apply(current.point);
           if (closed) return;
-          _state = current;
-          _question = current.question;
+          _accept(current);
           _command = null;
+          _commandQuestion = null;
           _swipe = null;
-          phase = current.active
-              ? AttackPhase.questionReady
-              : AttackPhase.sessionEnded;
-          message = current.active
-              ? 'This question was resolved on another device. Next question loaded.'
-              : 'This attack has ended or the point changed. Return to the map.';
+          if (current.active) {
+            message = 'Question updated from the server. Keep playing.';
+          }
           return;
         } catch (_) {
-          /* Keep the original command for a safe retry. */
+          /* Retry the same command after a connection interruption. */
         }
       }
       if (!closed) {
@@ -293,16 +457,10 @@ class CaptureSession extends ChangeNotifier {
     }
   }
 
-  void continuePlay() {
-    if (closed || busy || retryNeeded || phase != AttackPhase.resolving) return;
-    _question = _state.question;
-    phase = AttackPhase.questionReady;
-    message = 'Swipe forward from the football. Aim for your answer.';
-    notifyListeners();
-  }
-
   void close() {
     closed = true;
     phase = AttackPhase.sessionEnded;
+    _timer?.cancel();
+    _clock.stop();
   }
 }

@@ -110,13 +110,18 @@ class _ChapelCardState extends State<ChapelCard> {
     listenable: widget.point,
     builder: (context, _) {
       final point = widget.point.state, d = widget.distance();
+      final ownerColor = point.ownerTeamId == null
+          ? Colors.grey
+          : GameTeam.fromId(point.ownerTeamId!).color;
       final reason = widget.point.busy
           ? 'Connecting to live point…'
           : widget.point.friendly
           ? 'Your team controls this point'
           : !widget.point.loaded
           ? 'Loading live point…'
-          : widget.point.error ?? widget.reason();
+          : widget.point.error ??
+                widget.point.cooldownReason ??
+                widget.reason();
       return Dialog.fullscreen(
         child: Scaffold(
           appBar: AppBar(
@@ -171,16 +176,23 @@ class _ChapelCardState extends State<ChapelCard> {
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 16),
-                  Text(
-                    '◆ ${point.owner} · You: ${widget.point.playerTeam.displayName}',
+                  Chip(
+                    avatar: Icon(Icons.flag, color: ownerColor),
+                    label: Text('Owner: ${point.owner}'),
                   ),
+                  Text('Your team: ${widget.point.playerTeam.displayName}'),
                   const Text('Ownership and damage are saved online.'),
+                  const Text(
+                    '4 questions · 15 seconds each\nUp to 25% damage · one attempt every 10 minutes',
+                    textAlign: TextAlign.center,
+                  ),
                   const SizedBox(height: 16),
                   LinearProgressIndicator(
                     value: point.hp / point.maxHp,
+                    color: ownerColor,
                     minHeight: 12,
                   ),
-                  Text('${point.hp} / ${point.maxHp} HP'),
+                  Text('${point.healthLabel} health'),
                   Text(
                     d == null
                         ? 'Distance unavailable · enable foreground GPS'
@@ -189,6 +201,7 @@ class _ChapelCardState extends State<ChapelCard> {
                   const SizedBox(height: 16),
                   Text(
                     reason ?? 'In range. Stop walking before playing.',
+                    key: const ValueKey('point-attack-reason'),
                     textAlign: TextAlign.center,
                   ),
                   if (_error != null) Text(_error!),
@@ -197,12 +210,14 @@ class _ChapelCardState extends State<ChapelCard> {
                       'DEBUG ONLY · GPS bypass for local gameplay review',
                     ),
                   FilledButton.icon(
+                    key: const ValueKey('point-attack-button'),
                     onPressed: reason != null || _launching
                         ? null
                         : () async {
                             // Recheck at press time; a stale fix never stays eligible via this card.
                             if (widget.reason() != null ||
-                                widget.point.friendly) {
+                                widget.point.friendly ||
+                                widget.point.cooldownReason != null) {
                               setState(() {});
                               return;
                             }
@@ -221,7 +236,9 @@ class _ChapelCardState extends State<ChapelCard> {
                             }
                           },
                     icon: const Icon(Icons.sports_football),
-                    label: const Text('Attack'),
+                    label: Text(
+                      widget.point.canResume ? 'Resume attack' : 'Attack',
+                    ),
                   ),
                   if (widget.point.error != null || _error != null)
                     TextButton(

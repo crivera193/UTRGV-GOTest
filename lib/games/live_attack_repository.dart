@@ -32,6 +32,10 @@ class SupabaseAttackRepository implements AttackRepository {
   }
 
   @override
+  Future<AttackAccess> access(String spotId) async => AttackAccess.fromJson(
+    await _rpc('point_attack_access', {'spot_id': spotId}),
+  );
+  @override
   Future<PointState> loadPoint(String spotId) async {
     _check();
     final value = await client
