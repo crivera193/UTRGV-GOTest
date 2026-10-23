@@ -1,6 +1,8 @@
 import 'dart:math' as math;
 import 'package:flutter/widgets.dart';
 import 'campus_geography.dart';
+import 'campus_location.dart';
+import 'kitty_island.dart';
 
 /// Owner-selected buildings. Heights match the bundled map extrusions.
 class CampusCreatureLandmark {
@@ -60,4 +62,33 @@ class CampusCreaturePlacement {
   final CampusCreatureLandmark landmark;
   final Offset position;
   final double width;
+}
+
+/// One arrival gate per catalog landmark, sharing the cats' raw-GPS policy.
+class CampusCreatureProximity {
+  CampusCreatureProximity(Iterable<CampusCreatureLandmark> landmarks)
+    : _gates = {
+        for (final landmark in landmarks)
+          landmark.id: KittyIslandProximity(center: landmark.point),
+      };
+  final Map<String, KittyIslandProximity> _gates;
+  bool visible(String id) => _gates[id]?.visible ?? false;
+  bool get anyVisible => _gates.values.any((gate) => gate.visible);
+  void accept(CampusFix fix, {required bool onCampus, required DateTime now}) {
+    for (final gate in _gates.values) {
+      gate.accept(fix, onCampus: onCampus, now: now);
+    }
+  }
+
+  void refresh(DateTime now) {
+    for (final gate in _gates.values) {
+      gate.refresh(now);
+    }
+  }
+
+  void unavailable() {
+    for (final gate in _gates.values) {
+      gate.unavailable();
+    }
+  }
 }

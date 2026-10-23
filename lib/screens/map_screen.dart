@@ -72,6 +72,9 @@ class _MapScreenState extends State<MapScreen>
   bool _foreground = true;
   final _proximity = SpotProximity(const []);
   final _kittyProximity = KittyIslandProximity();
+  final _creatureProximity = CampusCreatureProximity(
+    CampusCreatureLandmark.all,
+  );
   final _kittyPlacement = ValueNotifier<List<Offset>?>(null);
   late final LatestProjection<List<Offset>> _kittyProjector;
   final _creaturePlacement = ValueNotifier<List<CampusCreaturePlacement>?>(
@@ -498,6 +501,11 @@ class _MapScreenState extends State<MapScreen>
                 p.accuracy,
                 p.timestamp,
               );
+              _creatureProximity.accept(
+                gameFix,
+                onCampus: _location!.state == CampusGpsState.onCampus,
+                now: DateTime.now(),
+              );
               _kittyProximity.accept(
                 gameFix,
                 onCampus: _location!.state == CampusGpsState.onCampus,
@@ -554,6 +562,7 @@ class _MapScreenState extends State<MapScreen>
         final wasWalking = _cowboyMotion.walking;
         _location!.expire(DateTime.now());
         _kittyProximity.refresh(DateTime.now());
+        _creatureProximity.refresh(DateTime.now());
         _syncKittyCats();
         final previousSpot = _proximity.state;
         _proximity.refresh(DateTime.now());
@@ -580,6 +589,8 @@ class _MapScreenState extends State<MapScreen>
   Future<void> _stopGps() async {
     _locationGeneration++;
     _kittyProximity.unavailable();
+    _creatureProximity.unavailable();
+    _syncBuildingCreatures();
     _kittyProjector.cancel();
     _kittyPlacement.value = null;
     _proximity.unavailable();
@@ -598,6 +609,7 @@ class _MapScreenState extends State<MapScreen>
     if (!mounted) return;
     if (_location?.state != CampusGpsState.onCampus) {
       _kittyProximity.unavailable();
+      _creatureProximity.unavailable();
     }
     _syncKittyCats();
     if (_location?.state != CampusGpsState.onCampus &&
@@ -995,7 +1007,11 @@ class _MapScreenState extends State<MapScreen>
   }
 
   void _syncBuildingCreatures() {
-    if (!_foreground || _gameOpen || !_ready || _error != null) {
+    if (!_foreground ||
+        _gameOpen ||
+        !_ready ||
+        _error != null ||
+        !_creatureProximity.anyVisible) {
       _creatureProjector.cancel();
       _creaturePlacement.value = null;
       return;
@@ -1014,16 +1030,16 @@ class _MapScreenState extends State<MapScreen>
     }
     final camera = _cameraState ?? await map.getCameraState();
     if (camera.zoom < 16) return const [];
+    final nearby = CampusCreatureLandmark.all
+        .where((landmark) => _creatureProximity.visible(landmark.id))
+        .toList();
     final pixels = await map.pixelsForCoordinates([
-      for (final landmark in CampusCreatureLandmark.all) _point(landmark.point),
+      for (final landmark in nearby) _point(landmark.point),
     ]);
     final placements = <CampusCreaturePlacement>[];
-    for (
-      var i = 0;
-      i < pixels.length && i < CampusCreatureLandmark.all.length;
-      i++
-    ) {
-      final pixel = pixels[i], landmark = CampusCreatureLandmark.all[i];
+    for (var i = 0; i < pixels.length && i < nearby.length; i++) {
+      final pixel = pixels[i], landmark = nearby[i];
+      if (!_creatureProximity.visible(landmark.id)) continue;
       if (pixel == null || !pixel.x.isFinite || !pixel.y.isFinite) continue;
       final position = Offset(
         pixel.x,

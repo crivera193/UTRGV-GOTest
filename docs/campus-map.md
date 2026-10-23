@@ -190,3 +190,12 @@ remain centered on their roofs at each scale. Evidence is in ignored
 `tmp/building-labels/`, including `zoom-and-tap.mp4`. No GPS override was needed.
 Shared camera/cowboy repairs remain separate uncommitted work. Feature branch:
 `codex/building-labels`; owner visual acceptance/main integration remain pending.
+
+
+## Nearby dragon and flower — October 23, 2026
+
+Each existing decorative landmark now uses the cats' shared raw-GPS arrival policy independently: enter within 30 m for 2 seconds, remain visible until beyond 45 m, require accuracy at most 20 m and a fix no older than 10 seconds. Stale/disabled GPS, leaving campus, pausing and opening a game hide decorations. Camera panning alone cannot reveal them. Existing artwork, landmark coordinates and zoom visibility remain unchanged. The reusable gate accepts the landmark collection without per-landmark behavior. The pre-existing bundled decoration catalog remains source-defined; this scoped change does not migrate it to the live game-point catalog or alter Supabase combat.
+
+Analysis is clean; five focused proximity/cat tests passed, including independent arrival, departure, stale/poor GPS and off-campus rejection. Android synthetic GPS checks on emulator-5554 (1080×2400) verified both hidden far away, Dragon near CS only, Flower near MED only, and both hidden again after leaving. Reproduce with `test_driver/campus_creatures_flow.dart` against the separate QA driver session. [Dragon](evidence/campus-creatures/dragon-near.png), [flower](evidence/campus-creatures/flower-near.png), [far away](evidence/campus-creatures/far.png).
+
+Normal preview restored in place as build 12035/versionCode 16035, signing unchanged. The pulled installed APK matches fresh SHA-256 `b8759c01c7827c6bc5fc837738c849431ff36457cc8f38f829bf69bfea176fa6`. Real outdoor GPS and owner visual acceptance remain unverified. Shared uncommitted camera/cowboy work is preserved separately; source changes stay on `codex/campus-creatures` for review.
