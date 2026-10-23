@@ -476,6 +476,7 @@ class _MapScreenState extends State<MapScreen>
   void _manualCamera() {
     _followQueued = false;
     if (!_gameOpen && _following && mounted) setState(() => _following = false);
+    _rememberView();
   }
 
   void _cameraChanged(CameraChangedEventData event) {
@@ -487,6 +488,7 @@ class _MapScreenState extends State<MapScreen>
       _cameraSession.rememberZoom(event.cameraState.zoom);
     }
     unawaited(_projector.request(invalidate: true));
+    _rememberView();
   }
 
   Future<void> _followMe() async {
@@ -495,7 +497,6 @@ class _MapScreenState extends State<MapScreen>
     _cameraSession.explore();
     if (_location?.marker != null && _locationEnabled) {
       setState(() => _following = true);
-    _rememberView();
       await _followPosition();
       return;
     }
@@ -507,7 +508,6 @@ class _MapScreenState extends State<MapScreen>
         _location!.clear(CampusGpsState.denied);
         return;
       }
-    _rememberView();
       _locationEnabled = true;
       _following = true;
       await _startGps();
@@ -519,6 +519,7 @@ class _MapScreenState extends State<MapScreen>
           _proximity.unavailable();
         }
         setState(() => _requesting = false);
+        _rememberView();
       }
     }
   }
@@ -542,7 +543,6 @@ class _MapScreenState extends State<MapScreen>
     if (_disposed || !mounted || !_foreground) return;
     await _stopGpsNow();
     if (!mounted || !_foreground) return;
-        _rememberView();
     final generation = _locationGeneration;
     _cowboyMotion.stop();
     _clearTravel();
@@ -664,6 +664,7 @@ class _MapScreenState extends State<MapScreen>
   Future<void> _stopGpsNow() async {
     if (_disposed) return;
     _locationGeneration++;
+    _lastFollowCenter = null;
     _kittyProximity.unavailable();
     _creatureProximity.unavailable();
     _syncBuildingCreatures();
@@ -689,7 +690,6 @@ class _MapScreenState extends State<MapScreen>
     }
     _syncKittyCats();
     if (_location?.state != CampusGpsState.onCampus &&
-    _lastFollowCenter = null;
         _location?.state != CampusGpsState.outside &&
         _location?.state != CampusGpsState.boundary) {
       _proximity.unavailable();
@@ -893,6 +893,17 @@ class _MapScreenState extends State<MapScreen>
 
   Future<void> _resumeGps() async {
     try {
+      if (!await Permission.locationWhenInUse.status.isGranted) {
+        if (!mounted) return;
+        setState(() {
+          _following = false;
+          _locationEnabled = false;
+          _location?.clear(CampusGpsState.denied);
+        });
+        _rememberView();
+        return;
+      }
+      if (!mounted || !_foreground) return;
       await _renderPlayer();
       await _startGps();
     } catch (_) {
@@ -918,17 +929,6 @@ class _MapScreenState extends State<MapScreen>
       return 'Enable GPS and move safely onto campus.';
     }
     return _proximity.attackReason(point.spot, DateTime.now());
-      if (!await Permission.locationWhenInUse.status.isGranted) {
-        if (!mounted) return;
-        setState(() {
-          _following = false;
-          _locationEnabled = false;
-          _location?.clear(CampusGpsState.denied);
-        });
-        _rememberView();
-        return;
-      }
-      if (!mounted || !_foreground) return;
   }
 
   Future<void> _showPoint(LiveGamePoint spot) async {
@@ -1070,6 +1070,7 @@ class _MapScreenState extends State<MapScreen>
     _kittyPlacement.dispose();
     _creatureProjector.dispose();
     _creaturePlacement.dispose();
+    _savedView.dispose();
     super.dispose();
   }
 
@@ -1095,7 +1096,6 @@ class _MapScreenState extends State<MapScreen>
         !_creatureProximity.anyVisible) {
       _creatureProjector.cancel();
       _creaturePlacement.value = null;
-    _savedView.dispose();
       return;
     }
     unawaited(_creatureProjector.request(invalidate: true));
