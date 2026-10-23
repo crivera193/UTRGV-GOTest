@@ -65,6 +65,7 @@ class _MapScreenState extends State<MapScreen>
   double _minZoom = 12;
   Size? _size;
   int _locationGeneration = 0;
+  DateTime? _resumeFixAfter;
   final _cowboyMotion = CowboyMotion();
   final _travel = CowboyTravel();
   final _cowboyPlacement = ValueNotifier<CowboyPlacement?>(null);
@@ -205,7 +206,7 @@ class _MapScreenState extends State<MapScreen>
     _projector = LatestProjection<CowboyPlacement>(
       read: _readCowboyProjection,
       apply: (placement) {
-        if (mounted) _cowboyPlacement.value = placement;
+        if (mounted && _foreground) _cowboyPlacement.value = placement;
       },
     );
     _travelTicker = createTicker(_advanceTravel);
@@ -537,20 +538,27 @@ class _MapScreenState extends State<MapScreen>
     }
   }
 
-  Future<void> _startGps() => _gpsOperations.run(_startGpsNow);
+  Future<void> _startGps({bool resuming = false}) =>
+      _gpsOperations.run(() => _startGpsNow(resuming: resuming));
 
-  Future<void> _startGpsNow() async {
+  Future<void> _startGpsNow({bool resuming = false}) async {
     if (_disposed || !mounted || !_foreground) return;
-    await _stopGpsNow();
+    await _stopGpsNow(preserveDisplay: resuming);
     if (!mounted || !_foreground) return;
     final generation = _locationGeneration;
     _cowboyMotion.stop();
-    _clearTravel();
-    _location!.begin(DateTime.now());
+    if (resuming) {
+      _location!.resume(DateTime.now());
+    } else {
+      _clearTravel();
+      _location!.begin(DateTime.now());
+    }
     final enabled = await gps.Geolocator.isLocationServiceEnabled();
     if (!mounted || !_foreground || generation != _locationGeneration) return;
     if (!enabled) {
       _location!.clear(CampusGpsState.disabled);
+      _clearTravel();
+      await _renderPlayer();
     } else {
       _positions =
           gps.Geolocator.getPositionStream(
@@ -560,7 +568,18 @@ class _MapScreenState extends State<MapScreen>
             ),
           ).listen(
             (p) {
-              if (!mounted || generation != _locationGeneration) return;
+              if (!mounted ||
+                  !_foreground ||
+                  generation != _locationGeneration) {
+                return;
+              }
+              final after = _resumeFixAfter;
+              if (after != null && !p.timestamp.isAfter(after)) {
+                _location!.expire(DateTime.now());
+                unawaited(_refreshLocation());
+                return;
+              }
+              _resumeFixAfter = null;
               _location!.accept(
                 CampusFix(
                   CampusPoint(p.longitude, p.latitude),
@@ -659,9 +678,10 @@ class _MapScreenState extends State<MapScreen>
     if (mounted) setState(() {});
   }
 
-  Future<void> _stopGps() => _gpsOperations.run(_stopGpsNow);
+  Future<void> _stopGps({bool preserveDisplay = false}) =>
+      _gpsOperations.run(() => _stopGpsNow(preserveDisplay: preserveDisplay));
 
-  Future<void> _stopGpsNow() async {
+  Future<void> _stopGpsNow({bool preserveDisplay = false}) async {
     if (_disposed) return;
     _locationGeneration++;
     _lastFollowCenter = null;
@@ -672,7 +692,15 @@ class _MapScreenState extends State<MapScreen>
     _kittyPlacement.value = null;
     _proximity.unavailable();
     _cowboyMotion.stop();
-    _clearTravel();
+    _location?.expire(DateTime.now());
+    if (preserveDisplay && _location?.marker != null) {
+      _travel.pause();
+      _travelTicker.stop();
+      _previousTravelTick = null;
+      _projector.cancel();
+    } else {
+      _clearTravel();
+    }
     _expiry?.cancel();
     _expiry = null;
     final positions = _positions, services = _services;
@@ -879,11 +907,13 @@ class _MapScreenState extends State<MapScreen>
       _syncBuildingCreatures();
       _projector.cancel();
       _cowboyMotion.stop();
-      _clearTravel();
       _proximity.unavailable();
-      _location?.clear(CampusGpsState.stale);
-      unawaited(_stopGps());
+      unawaited(_stopGps(preserveDisplay: true));
+      setState(() {});
     } else if (change == MapLifecycleChange.resume) {
+      _location?.expire(DateTime.now());
+      if (_location?.marker == null) _clearTravel();
+      setState(() {});
       _syncBuildingCreatures();
       if (_pointsInitialized) unawaited(_points.load());
       if (_openPoint case final GamePoint open) unawaited(open.load());
@@ -899,13 +929,16 @@ class _MapScreenState extends State<MapScreen>
           _following = false;
           _locationEnabled = false;
           _location?.clear(CampusGpsState.denied);
+          _clearTravel();
         });
+        unawaited(_renderPlayer());
         _rememberView();
         return;
       }
       if (!mounted || !_foreground) return;
+      _resumeFixAfter = DateTime.now();
       await _renderPlayer();
-      await _startGps();
+      await _startGps(resuming: true);
     } catch (_) {
       if (mounted) setState(() => _location?.clear(CampusGpsState.unavailable));
     }

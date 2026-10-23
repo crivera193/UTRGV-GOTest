@@ -1,5 +1,6 @@
 // Explicit emulator-only test entry point. Never used by lib/main.dart.
 import 'dart:convert';
+import 'package:geolocator/geolocator.dart' as gps;
 import 'package:campus_app/config/app_configuration.dart';
 import 'package:campus_app/main.dart';
 import 'package:campus_app/screens/main_screen.dart';
@@ -22,6 +23,25 @@ import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 const runId = String.fromEnvironment('TEAM_E2E_RUN');
+bool holdGps = false;
+
+class DelayedQaGps extends gps.GeolocatorPlatform {
+  DelayedQaGps(this.delegate);
+  final gps.GeolocatorPlatform delegate;
+  @override
+  Future<bool> isLocationServiceEnabled() =>
+      delegate.isLocationServiceEnabled();
+  @override
+  Stream<gps.ServiceStatus> getServiceStatusStream() =>
+      delegate.getServiceStatusStream();
+  @override
+  Stream<gps.Position> getPositionStream({
+    gps.LocationSettings? locationSettings,
+  }) => delegate
+      .getPositionStream(locationSettings: locationSettings)
+      .where((_) => !holdGps);
+}
+
 CaptureSession? attack;
 GamePoint? point;
 
@@ -52,11 +72,22 @@ Future<void> main() async {
           'oipidltfvzodpiumdsaq.supabase.co') {
     throw StateError('Explicit debug test run and verified project required.');
   }
+  gps.GeolocatorPlatform.instance = DelayedQaGps(
+    gps.GeolocatorPlatform.instance,
+  );
   enableFlutterDriverExtension(
     handler: (message) async {
       final data = jsonDecode(message!) as Map<String, dynamic>;
       final client = Supabase.instance.client;
       switch (data['op']) {
+        case 'delay_gps':
+          holdGps = data['hold'] == true;
+          return jsonEncode({'held': holdGps});
+        case 'map_lifecycle':
+          WidgetsBinding.instance.handleAppLifecycleStateChanged(
+            AppLifecycleState.values.byName(data['state'] as String),
+          );
+          return jsonEncode({'sent': data['state']});
         case 'map_view':
           final element =
               ft.find.byType(MapScreen).evaluate().single as StatefulElement;
@@ -64,6 +95,14 @@ Future<void> main() async {
           return jsonEncode({
             'view': state.bucket?.read<Object?>('view'),
             'instance': identityHashCode(state),
+            'cowboy_visible': ft.find
+                .byKey(const ValueKey('cowboy-runtime-frame'))
+                .evaluate()
+                .isNotEmpty,
+            'gps_waiting': ft.find
+                .text('Waiting for a reliable GPS fix')
+                .evaluate()
+                .isNotEmpty,
           });
         case 'trainer':
           final trainer = await SupabaseTrainerRepository(client).load();

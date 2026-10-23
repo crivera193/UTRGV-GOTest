@@ -37,6 +37,13 @@ class CampusLocationPolicy {
     clear(CampusGpsState.waiting);
   }
 
+  /// Reconnect the foreground stream without discarding an unexpired display.
+  /// Gameplay gates are reset separately and require a new provider fix.
+  void resume(DateTime now) {
+    expire(now);
+    if (marker == null) begin(now);
+  }
+
   void accept(CampusFix fix, DateTime now) {
     if (_last != null && !fix.timestamp.isAfter(_last!.timestamp)) return;
     if (now.difference(fix.timestamp).inSeconds > 20 ||

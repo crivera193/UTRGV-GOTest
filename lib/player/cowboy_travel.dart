@@ -57,6 +57,11 @@ class CowboyTravel {
     return true;
   }
 
+  void pause() {
+    target = position;
+    _age = 0;
+  }
+
   void clear() {
     position = target = null;
     _timestamp = null;
