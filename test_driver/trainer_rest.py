@@ -1,8 +1,6 @@
 """Live QA for profile isolation, avatar storage and idempotent progression."""
 from pathlib import Path
 exec(Path('test_driver/live_attack_rest.py').read_text().split('tokens={};users={}')[0])
-from PIL import Image,ImageDraw
-import io
 out=Path('output/trainer-e2e');out.mkdir(parents=True,exist_ok=True)
 sessions={k:ok('/auth/v1/token?grant_type=password',{'email':f[k],'password':f['password']}) for k in ('a','b')}
 tokens={k:v['access_token'] for k,v in sessions.items()}
@@ -10,7 +8,7 @@ def trainer(k='a'):return ok('/rest/v1/rpc/read_trainer',{},tokens[k])
 a=trainer(); assert a['progress']['xp']==0,'Fresh progression expected; do not reset existing records.'
 assert len(a['levels'])==20 and len(a['ranks'])==5 and len(a['achievements'])==8
 def save(profile,who='a',**extra):
- return req('/rest/v1/rpc/update_trainer_profile',{'trainer_username':'qa_explorer_'+f['run'][-8:],'trainer_name':'QA Campus Explorer','trainer_bio':'Testing a real saved trainer profile.','trainer_avatar':None,'expected_revision':profile['revision'],**extra},tokens[who])
+ return req('/rest/v1/rpc/update_trainer_profile',{'trainer_username':'qa_explorer_'+f['run'][-8:],'trainer_name':'QA Campus Explorer','trainer_bio':'Testing a real saved trainer profile.','trainer_avatar':'cowboy','expected_revision':profile['revision'],**extra},tokens[who])
 status,p=save(a['profile']); assert status==200,(status,p)
 assert save(a['profile'])[0]==409,'Stale update accepted'
 b=trainer('b'); assert save(b['profile'],'b')[0]==409,'Duplicate username accepted'
@@ -22,22 +20,7 @@ assert req('/rest/v1/rpc/read_trainer',{},None)[0] in (401,403)
 assert req('/rest/v1/progression_settings?id=eq.true',{'correct_xp':999},tokens['a'],'PATCH')[0]==403
 print('PASS: unique usernames, profile validation, stale revision conflict, account isolation and protected XP/config writes.',flush=True)
 
-image=Image.new('RGB',(512,512),'#123d2b');draw=ImageDraw.Draw(image);draw.ellipse((90,70,420,400),fill='#efc467');draw.rectangle((70,350,440,400),fill='#e85c08')
-buffer=io.BytesIO();image.save(buffer,format='JPEG');photo=buffer.getvalue();(out/'qa-avatar.jpg').write_bytes(photo)
-path=sessions['a']['user']['id']+'/'+uid()+'.jpg'
-def binary_upload(who,path,content=photo,mime='image/jpeg'):
- request=urllib.request.Request(base+'/storage/v1/object/trainer-avatars/'+path,data=content,headers={'apikey':key,'Authorization':'Bearer '+tokens[who],'Content-Type':mime},method='POST')
- try:
-  with urllib.request.urlopen(request,timeout=30) as response:return response.status
- except urllib.error.HTTPError as e:return e.code
-assert binary_upload('a',path)==200
-assert binary_upload('b',sessions['a']['user']['id']+'/'+uid()+'.jpg')>=400
-assert binary_upload('a',sessions['a']['user']['id']+'/'+uid()+'.html',b'<html>','text/html')>=400
-status,p=save(p,trainer_avatar=path);assert status==200,(status,p)
-assert save(b['profile'],'b',trainer_username='qa_other_'+f['run'][-8:],trainer_avatar=path)[0]==403
-assert req('/storage/v1/object/sign/trainer-avatars/'+path,{'expiresIn':60},tokens['b'])[0]>=400
-fresh=trainer();assert fresh['profile']['avatar_path']==path and fresh['profile']['display_name']=='QA Campus Explorer'
-print('PASS: real JPEG upload/profile link persists; private avatar cross-account access and invalid MIME rejected.',flush=True)
+print('Avatar upload policy checks moved to test_driver/avatar_rest.py (preset-only owner revision).',flush=True)
 
 def hit(a,mode='correct'):
  body=shot(tokens['a'],a,mode);result=ok('/rest/v1/rpc/submit_point_kick',body,tokens['a'])

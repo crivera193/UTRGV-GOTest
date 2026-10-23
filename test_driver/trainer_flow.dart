@@ -53,18 +53,18 @@ Future<void> main(List<String> args) async {
           'Native edits not saved',
         );
         check(
-          saved['profile']['avatar_path'] != null &&
+          saved['profile']['avatar_id'] != null &&
               saved['xp'] == 550 &&
               saved['level'] == 3 &&
               saved['rank'] == 'Campus Scout',
-          'Saved photo/progression missing',
+          'Saved avatar/progression missing',
         );
         await File(
           '${out.path}/native-saved.json',
         ).writeAsString(jsonEncode(saved));
         await capture('trainer-saved');
         stdout.writeln(
-          'PASS: native profile edit saved online; real private avatar loaded; 550 XP, level 3, Campus Scout restored.',
+          'PASS: native profile edit saved online; approved preset avatar loaded; 550 XP, level 3, Campus Scout restored.',
         );
       } else if (args.first == 'remote') {
         // Wait for an actual Realtime-driven widget update; do not call refresh first.
@@ -87,8 +87,8 @@ Future<void> main(List<String> args) async {
         check(
           saved['xp'] == 550 &&
               (saved['earned'] as List).length == 4 &&
-              saved['profile']['avatar_path'] != null,
-          'Cold launch lost profile, photo, XP or achievements',
+              saved['profile']['avatar_id'] != null,
+          'Cold launch lost profile, avatar, XP or achievements',
         );
         await capture('trainer-cold-launch');
         await driver.scrollIntoView(find.text('Sharp Shooter'));

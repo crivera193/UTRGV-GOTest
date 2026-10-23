@@ -4,7 +4,7 @@ The former social-events product has been removed in place. The app is named UTR
 
 ## Current scope
 
-- Trainer profiles now support a unique username, trainer name, private photo and bio editing. Live server-owned XP, levels, ranks, badges and achievements are configurable in Supabase: [trainer progression and verification](docs/trainer-progression.md).
+- Trainer profiles now support a unique username, trainer name, premade family-friendly avatar and bio editing. Live server-owned XP, levels, ranks, badges and achievements are configurable in Supabase: [trainer progression and verification](docs/trainer-progression.md).
 - Permanent team onboarding now gates authenticated teamless accounts before the map. The three game teams are Health and Science (blue), Math and Engineering (red), and Art and Stuff (yellow). Implementation, live migration/security checks and visual-review limits: [team onboarding](docs/team-onboarding.md).
 - Email/password accounts restricted to .edu addresses, without email verification (all .edu domains, not only UTRGV).
 - Clean account screens and a custom campus-only Mapbox map with opt-in GPS.

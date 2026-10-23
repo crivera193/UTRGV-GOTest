@@ -1,9 +1,5 @@
 import 'dart:async';
-import 'dart:typed_data';
-import 'package:flutter/foundation.dart';
-import 'package:image/image.dart' as img;
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../games/point_attack.dart' show attackCommandId;
 
 class TrainerSnapshot {
   TrainerSnapshot(
@@ -12,10 +8,9 @@ class TrainerSnapshot {
     this.levels,
     this.ranks,
     this.achievements,
-    this.settings, {
-    this.avatarUrl,
-    this.photoUnavailable = false,
-  }) {
+    this.settings,
+    this.avatars,
+  ) {
     if (levels.isEmpty || levels.first['min_xp'] != 0 || ranks.isEmpty) {
       throw const FormatException('Progression catalog unavailable.');
     }
@@ -31,11 +26,7 @@ class TrainerSnapshot {
       }
     }
   }
-  factory TrainerSnapshot.fromJson(
-    Map<String, dynamic> j, {
-    String? avatarUrl,
-    bool photoUnavailable = false,
-  }) => TrainerSnapshot(
+  factory TrainerSnapshot.fromJson(Map<String, dynamic> j) => TrainerSnapshot(
     Map<String, dynamic>.from(j['profile']),
     Map<String, dynamic>.from(j['progress']),
     (j['levels'] as List).map((v) => Map<String, dynamic>.from(v)).toList(),
@@ -44,13 +35,13 @@ class TrainerSnapshot {
         .map((v) => Map<String, dynamic>.from(v))
         .toList(),
     Map<String, dynamic>.from(j['settings']),
-    avatarUrl: avatarUrl,
-    photoUnavailable: photoUnavailable,
+    (j['avatars'] as List).map((v) => Map<String, dynamic>.from(v)).toList(),
   );
   final Map<String, dynamic> profile, progress, settings;
   final List<Map<String, dynamic>> levels, ranks, achievements;
-  final String? avatarUrl;
-  final bool photoUnavailable;
+  final List<Map<String, dynamic>> avatars;
+  Map<String, dynamic>? avatar(String? id) =>
+      avatars.where((v) => v['id'] == id).firstOrNull;
   int get xp => (progress['xp'] as num).toInt();
   Map<String, dynamic> get currentLevel =>
       levels.lastWhere((l) => (l['min_xp'] as num) <= xp);
@@ -83,7 +74,6 @@ abstract interface class TrainerRepository {
     required String? avatar,
     required int revision,
   });
-  Future<String> upload(Uint8List jpeg);
   Stream<void> watch();
 }
 
@@ -105,25 +95,7 @@ class SupabaseTrainerRepository implements TrainerRepository {
           as Map,
     );
     _check();
-    String? url;
-    bool unavailable = false;
-    final path = j['profile']['avatar_path'] as String?;
-    if (path != null) {
-      try {
-        url = await client.storage
-            .from('trainer-avatars')
-            .createSignedUrl(path, 3600)
-            .timeout(const Duration(seconds: 10));
-      } catch (_) {
-        unavailable = true;
-      }
-    }
-    _check();
-    return TrainerSnapshot.fromJson(
-      j,
-      avatarUrl: url,
-      photoUnavailable: unavailable,
-    );
+    return TrainerSnapshot.fromJson(j);
   }
 
   @override
@@ -151,25 +123,6 @@ class SupabaseTrainerRepository implements TrainerRepository {
   }
 
   @override
-  Future<String> upload(Uint8List jpeg) async {
-    _check();
-    final path = '$userId/${attackCommandId()}.jpg';
-    await client.storage
-        .from('trainer-avatars')
-        .uploadBinary(
-          path,
-          jpeg,
-          fileOptions: const FileOptions(
-            contentType: 'image/jpeg',
-            upsert: false,
-          ),
-        )
-        .timeout(const Duration(seconds: 30));
-    _check();
-    return path;
-  }
-
-  @override
   Stream<void> watch() {
     late StreamController<void> output;
     final subscriptions = <StreamSubscription>[];
@@ -184,6 +137,7 @@ class SupabaseTrainerRepository implements TrainerRepository {
     output = StreamController<void>(
       onListen: () {
         for (final table in [
+          'trainer_avatars',
           'progression_settings',
           'progression_levels',
           'progression_ranks',
@@ -222,30 +176,4 @@ class SupabaseTrainerRepository implements TrainerRepository {
     );
     return output.stream;
   }
-}
-
-/// Re-encode pixels into a new JPEG: strips EXIF/GPS and bounds upload dimensions.
-Uint8List prepareTrainerPhoto(Uint8List bytes) {
-  if (bytes.length > 10 * 1024 * 1024) {
-    throw const FormatException('Choose a photo smaller than 10 MB.');
-  }
-  final decoder = img.findDecoderForData(bytes);
-  final info = decoder?.startDecode(bytes);
-  if (info == null || info.width * info.height > 24000000) {
-    throw const FormatException(
-      'Choose a JPEG, PNG or WebP photo under 24 megapixels.',
-    );
-  }
-  final decoded = decoder!.decodeFrame(0);
-  if (decoded == null) {
-    throw const FormatException('This photo could not be read.');
-  }
-  final crop = img.copyResizeCropSquare(
-    img.bakeOrientation(decoded),
-    size: 512,
-  );
-  final clean = img.Image(width: 512, height: 512, numChannels: 3);
-  img.fill(clean, color: img.ColorRgb8(255, 255, 255));
-  img.compositeImage(clean, crop);
-  return Uint8List.fromList(img.encodeJpg(clean, quality: 85));
 }

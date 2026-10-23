@@ -1,11 +1,9 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../teams/team_membership.dart';
 import 'trainer_profile.dart';
+import 'trainer_avatar.dart';
 
 class TrainerScreen extends StatefulWidget {
   const TrainerScreen({super.key, this.repository});
@@ -26,7 +24,6 @@ class _TrainerScreenState extends State<TrainerScreen>
       bio = TextEditingController();
   bool editing = false, busy = false, loading = false, again = false;
   String? error, notice, avatar;
-  Uint8List? preview;
   int editRevision = 0;
   @override
   void initState() {
@@ -53,19 +50,6 @@ class _TrainerScreenState extends State<TrainerScreen>
         }
       },
     );
-    if (widget.repository == null &&
-        defaultTargetPlatform == TargetPlatform.android) {
-      try {
-        await _recoverPhoto();
-      } catch (_) {
-        if (mounted) {
-          setState(
-            () => error =
-                'Your interrupted photo could not be recovered. Choose it again to retry.',
-          );
-        }
-      }
-    }
   }
 
   @override
@@ -110,81 +94,9 @@ class _TrainerScreenState extends State<TrainerScreen>
       username.text = p['username'] as String? ?? '';
       name.text = p['display_name'] as String;
       bio.text = p['bio'] as String;
-      avatar = p['avatar_path'] as String?;
-      preview = null;
+      avatar = p['avatar_id'] as String?;
       notice = null;
     });
-  }
-
-  Future<void> _recoverPhoto() async {
-    final preferences = await SharedPreferences.getInstance();
-    final owner = preferences.getString('trainer_pending_photo_user');
-    if (owner == null) return;
-    final response = await ImagePicker().retrieveLostData();
-    await preferences.remove('trainer_pending_photo_user');
-    if (!mounted || owner != Supabase.instance.client.auth.currentUser?.id) {
-      return;
-    }
-    if (response.files?.isNotEmpty == true && data != null) {
-      edit();
-      await _photo(response.files!.first);
-      if (mounted) {
-        setState(
-          () => notice = 'Recovered your photo. Review your profile and save.',
-        );
-      }
-    }
-  }
-
-  Future<void> pickPhoto() async {
-    final preferences = await SharedPreferences.getInstance();
-    await preferences.setString(
-      'trainer_pending_photo_user',
-      Supabase.instance.client.auth.currentUser!.id,
-    );
-    try {
-      final photo = await ImagePicker().pickImage(
-        source: ImageSource.gallery,
-        maxWidth: 1024,
-        maxHeight: 1024,
-        imageQuality: 90,
-        requestFullMetadata: false,
-      );
-      await preferences.remove('trainer_pending_photo_user');
-      if (photo != null && mounted) await _photo(photo);
-    } catch (_) {
-      if (mounted) {
-        setState(
-          () => error =
-              'Unable to open that photo. Try another JPEG, PNG or WebP image.',
-        );
-      }
-    }
-  }
-
-  Future<void> _photo(XFile file) async {
-    if (!mounted) return;
-    setState(() => busy = true);
-    try {
-      final jpeg = await compute(prepareTrainerPhoto, await file.readAsBytes());
-      final path = await repo.upload(jpeg);
-      if (mounted) {
-        setState(() {
-          avatar = path;
-          preview = jpeg;
-          error = null;
-        });
-      }
-    } catch (_) {
-      if (mounted) {
-        setState(
-          () => error =
-              'Photo upload failed. Choose another image or retry; your saved photo is unchanged.',
-        );
-      }
-    } finally {
-      if (mounted) setState(() => busy = false);
-    }
   }
 
   Future<void> save() async {
@@ -204,7 +116,6 @@ class _TrainerScreenState extends State<TrainerScreen>
       setState(() {
         editing = false;
         notice = 'Profile saved.';
-        preview = null;
       });
       await refresh();
     } on PostgrestException catch (e) {
@@ -332,58 +243,70 @@ class _TrainerScreenState extends State<TrainerScreen>
                     if (notice != null)
                       Text(notice!, key: const ValueKey('trainer-notice')),
                     Center(
-                      child: CircleAvatar(
-                        radius: 52,
-                        backgroundColor: team.color.withValues(alpha: .25),
-                        child: ClipOval(
-                          child: preview != null
-                              ? Image.memory(
-                                  preview!,
-                                  width: 104,
-                                  height: 104,
-                                  fit: BoxFit.cover,
-                                )
-                              : (!editing || avatar != null) &&
-                                    d.avatarUrl != null
-                              ? Image.network(
-                                  d.avatarUrl!,
-                                  width: 104,
-                                  height: 104,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (_, _, _) => const Icon(
-                                    Icons.person_outline,
-                                    size: 60,
-                                  ),
-                                )
-                              : const Icon(Icons.person_outline, size: 60),
+                      child: TrainerAvatar(
+                        definition: d.avatar(
+                          editing ? avatar : d.profile['avatar_id'] as String?,
                         ),
+                        size: 104,
                       ),
                     ),
-                    if (d.photoUnavailable)
-                      const Text(
-                        'Photo unavailable. Refresh to retry.',
-                        textAlign: TextAlign.center,
-                      ),
                     if (editing) ...[
+                      const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 12),
+                        child: Text(
+                          'Choose an avatar',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                      ),
                       Wrap(
                         alignment: WrapAlignment.center,
+                        spacing: 12,
+                        runSpacing: 12,
                         children: [
-                          TextButton.icon(
-                            onPressed: busy ? null : pickPhoto,
-                            icon: const Icon(Icons.photo_library_outlined),
-                            label: const Text('Choose photo'),
-                          ),
-                          TextButton(
-                            onPressed: busy
-                                ? null
-                                : () {
-                                    setState(() {
-                                      avatar = null;
-                                      preview = null;
-                                    });
-                                  },
-                            child: const Text('Remove photo'),
-                          ),
+                          for (final choice in d.avatars.where(
+                            (v) => v['enabled'] == true,
+                          ))
+                            Semantics(
+                              selected: avatar == choice['id'],
+                              button: true,
+                              label: choice['label'] as String,
+                              child: InkWell(
+                                key: ValueKey('avatar-${choice['id']}'),
+                                onTap: busy
+                                    ? null
+                                    : () {
+                                        setState(
+                                          () => avatar = choice['id'] as String,
+                                        );
+                                      },
+                                borderRadius: BorderRadius.circular(16),
+                                child: Container(
+                                  width: 88,
+                                  padding: const EdgeInsets.all(6),
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(16),
+                                    border: Border.all(
+                                      color: avatar == choice['id']
+                                          ? Theme.of(
+                                              context,
+                                            ).colorScheme.primary
+                                          : Colors.transparent,
+                                      width: 3,
+                                    ),
+                                  ),
+                                  child: Column(
+                                    children: [
+                                      TrainerAvatar(
+                                        definition: choice,
+                                        size: 64,
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(choice['label'] as String),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
                         ],
                       ),
                       Form(
@@ -442,7 +365,6 @@ class _TrainerScreenState extends State<TrainerScreen>
                                 : () {
                                     setState(() {
                                       editing = false;
-                                      preview = null;
                                       error = null;
                                     });
                                   },

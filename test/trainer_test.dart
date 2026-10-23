@@ -1,12 +1,10 @@
 import 'dart:async';
-import 'dart:typed_data';
 import 'package:campus_app/trainer/trainer_profile.dart';
 import 'package:campus_app/trainer/trainer_screen.dart';
 import 'package:campus_app/teams/team_membership.dart';
 import 'package:campus_app/teams/game_team.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:image/image.dart' as img;
 import 'team_membership_test.dart' show MemoryTeams;
 
 Map<String, dynamic> fixture({int xp = 150, int revision = 0}) => {
@@ -14,7 +12,7 @@ Map<String, dynamic> fixture({int xp = 150, int revision = 0}) => {
     'username': 'qa_trainer',
     'display_name': 'QA Explorer',
     'bio': 'Campus explorer',
-    'avatar_path': null,
+    'avatar_id': 'cowboy',
     'revision': revision,
   },
   'progress': {
@@ -24,6 +22,24 @@ Map<String, dynamic> fixture({int xp = 150, int revision = 0}) => {
     'completed_attacks': 1,
     'captures': 0,
   },
+  'avatars': [
+    {
+      'id': 'cowboy',
+      'label': 'Cowboy',
+      'design': 'cowboy',
+      'background': '#DDEBDD',
+      'accent': '#9A572F',
+      'enabled': true,
+    },
+    {
+      'id': 'cat',
+      'label': 'Cat',
+      'design': 'cat',
+      'background': '#F9E4CC',
+      'accent': '#D6A05C',
+      'enabled': true,
+    },
+  ],
   'levels': [
     {'level': 1, 'min_xp': 0},
     {'level': 2, 'min_xp': 100},
@@ -72,8 +88,6 @@ class TrainerTransport implements TrainerRepository {
   @override
   Stream<void> watch() => changes.stream;
   @override
-  Future<String> upload(Uint8List jpeg) async => 'own/photo.jpg';
-  @override
   Future<void> save({
     required String username,
     required String name,
@@ -90,7 +104,7 @@ class TrainerTransport implements TrainerRepository {
         'username': username,
         'display_name': name,
         'bio': bio,
-        'avatar_path': avatar,
+        'avatar_id': avatar,
         'revision': revision + 1,
       },
     };
@@ -111,22 +125,6 @@ void main() {
     expect(d.fraction, 1);
     expect(
       () => TrainerSnapshot.fromJson({...j, 'levels': []}),
-      throwsFormatException,
-    );
-  });
-  test('photo is bounded JPEG without original metadata', () {
-    final original = img.Image(width: 100, height: 200);
-    original.exif.gpsIfd[1] = 'N';
-    final result = prepareTrainerPhoto(
-      Uint8List.fromList(img.encodePng(original)),
-    );
-    final decoded = img.decodeJpg(result)!;
-    expect(decoded.width, 512);
-    expect(decoded.height, 512);
-    expect(decoded.exif.gpsIfd.isEmpty, isTrue);
-    expect(result.length, lessThan(2097152));
-    expect(
-      () => prepareTrainerPhoto(Uint8List.fromList([1, 2, 3])),
       throwsFormatException,
     );
   });
@@ -151,15 +149,35 @@ void main() {
       expect(find.text('150 XP'), findsOneWidget);
       await tester.tap(find.text('Edit profile'));
       await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('avatar-cat')));
       await tester.enterText(
         find.byKey(const ValueKey('trainer-username')),
         '!',
       );
-      await tester.ensureVisible(find.text('Save profile'));
+      await tester.scrollUntilVisible(
+        find.text('Save profile'),
+        250,
+        scrollable: find
+            .descendant(
+              of: find.byType(ListView),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
       await tester.tap(find.text('Save profile'));
       await tester.pump(const Duration(seconds: 1));
       await tester.pumpAndSettle();
       expect(repo.savedRevision, isNull);
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('trainer-username')),
+        -250,
+        scrollable: find
+            .descendant(
+              of: find.byType(ListView),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
       await tester.enterText(
         find.byKey(const ValueKey('trainer-username')),
         'new_trainer',
@@ -168,12 +186,22 @@ void main() {
         find.byKey(const ValueKey('trainer-name')),
         'New Explorer',
       );
-      await tester.ensureVisible(find.text('Save profile'));
+      await tester.scrollUntilVisible(
+        find.text('Save profile'),
+        250,
+        scrollable: find
+            .descendant(
+              of: find.byType(ListView),
+              matching: find.byType(Scrollable),
+            )
+            .first,
+      );
       await tester.tap(find.text('Save profile'));
       await tester.pump(const Duration(seconds: 1));
       await tester.pumpAndSettle();
       expect(repo.json['profile']['display_name'], 'New Explorer');
       expect(repo.json['progress']['xp'], 150);
+      expect(repo.json['profile']['avatar_id'], 'cat');
       expect(find.text('Profile saved.'), findsOneWidget);
       await tester.pumpWidget(const SizedBox());
       unawaited(repo.changes.close());
@@ -190,7 +218,16 @@ void main() {
     repo.json = fixture(xp: 400, revision: 1);
     repo.changes.add(null);
     await tester.pumpAndSettle();
-    await tester.ensureVisible(find.text('Save profile'));
+    await tester.scrollUntilVisible(
+      find.text('Save profile'),
+      250,
+      scrollable: find
+          .descendant(
+            of: find.byType(ListView),
+            matching: find.byType(Scrollable),
+          )
+          .first,
+    );
     await tester.tap(find.text('Save profile'));
     await tester.pump(const Duration(seconds: 1));
     await tester.pumpAndSettle();
