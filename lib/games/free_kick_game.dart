@@ -11,12 +11,12 @@ import 'package:flutter/material.dart'
         FontWeight,
         TextAlign,
         LinearGradient;
-import 'chapel_capture.dart';
+import 'point_attack.dart';
 import 'football_shot.dart';
 import 'game_host.dart';
 
-class ChapelFootballGame extends SessionGame with DragCallbacks {
-  ChapelFootballGame(super.session, super.onExit);
+class FreeKickGame extends SessionGame with DragCallbacks {
+  FreeKickGame(super.session, super.onExit);
   CaptureSession get attack => session.capture!;
   int? _pointer, _shotId;
   Offset? _start, _end;
@@ -310,8 +310,8 @@ class ChapelFootballGame extends SessionGame with DragCallbacks {
       text(
         c,
         attack.captured
-            ? '◆ ${attack.point.playerTeam.displayName}\nChapel Point · ${attack.point.state.healthLabel} health\nSaved online'
-            : '${attack.correct}/4 correct · ${attack.damagePercent}% damage\nSaved online. Return to the map.',
+            ? '◆ ${attack.point.playerTeam.displayName}\n${attack.point.spot.name} · ${attack.point.state.healthLabel} health\nSaved online'
+            : '${attack.correct}/${attack.rules.questionsTotal} correct · ${attack.damagePercent}% damage\nSaved online. Return to the map.',
         const Rect.fromLTWH(55, 455, 290, 65),
         font: 17,
       );

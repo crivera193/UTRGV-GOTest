@@ -1,12 +1,41 @@
 import 'dart:async';
-import 'package:campus_app/games/chapel_capture.dart';
-import 'package:campus_app/games/chapel_card.dart';
+import 'package:campus_app/games/point_attack.dart';
+import 'package:campus_app/games/point_card.dart';
 import 'package:campus_app/games/football_shot.dart';
 import 'package:campus_app/games/game_host.dart';
 import 'package:campus_app/map/campus_location.dart';
+import 'package:campus_app/map/campus_geography.dart';
 import 'package:campus_app/teams/game_team.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+Map<String, dynamic> pointFixture() => {
+  'id': 'synthetic-point',
+  'name': 'Synthetic point',
+  'description': 'Stop safely to play.',
+  'image_url': null,
+  'latitude': 0.0,
+  'longitude': 0.0,
+  'game_id': 'free-kick',
+  'enabled': true,
+  'attack_meters': 39.624,
+  'entry_meters': 39.624,
+  'exit_meters': 45.0,
+  'play_version': 0,
+  'hp': 100,
+  'max_hp': 100,
+  'owner_team_id': null,
+  'revision': 0,
+  'rules': {
+    'id': 'test-rules',
+    'version': 1,
+    'questions_total': 4,
+    'question_seconds': 15,
+    'cooldown_seconds': 600,
+    'max_damage_percent': 25,
+  },
+};
+LiveGamePoint testSpot() => LiveGamePoint.fromJson(pointFixture());
 
 // Test transport only; the live database separately verifies all rules.
 class Transport implements AttackRepository {
@@ -25,6 +54,7 @@ class Transport implements AttackRepository {
         ? 'completed'
         : 'active',
     'sequence': sequence,
+    'rules': pointFixture()['rules'],
     'correct_count': correct,
     'wrong_count': wrong,
     'miss_count': miss,
@@ -37,6 +67,7 @@ class Transport implements AttackRepository {
         .toUtc()
         .toIso8601String(),
     'point': {
+      ...pointFixture(),
       'owner_team_id': hp <= 0 ? 'art_stuff' : null,
       'hp': hp <= 0 ? 100 : hp,
       'max_hp': 100,
@@ -51,10 +82,10 @@ class Transport implements AttackRepository {
     },
   };
   @override
-  Future<PointState> loadPoint(String _) async =>
+  Future<LiveGamePoint> loadPoint(String _) async =>
       AttackState.fromJson(payload()).point;
   @override
-  Stream<PointState> watchPoint(String _) => const Stream.empty();
+  Stream<LiveGamePoint> watchPoint(String _) => const Stream.empty();
   @override
   Future<AttackAccess> access(String _) async => AttackAccess(
     serverNow: DateTime.now(),
@@ -123,12 +154,16 @@ Future<void> kick(CaptureSession s) async {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
-  final fix = CampusFix(ChapelConfig.point, 1, DateTime.now());
+  final fix = CampusFix(const CampusPoint(0, 0), 1, DateTime.now());
   test(
     'four perfect questions end at exactly 25% damage, not a solo capture',
     () async {
       final repo = Transport()..outcome = 'correct';
-      final p = ChapelPoint(repo, playerTeam: GameTeam.artStuff);
+      final p = GamePoint(
+        repo,
+        playerTeam: GameTeam.artStuff,
+        spot: testSpot(),
+      );
       final s = await CaptureSession.open(p, fix);
       for (var i = 0; i < 4; i++) {
         await kick(s);
@@ -150,7 +185,11 @@ void main() {
     'wrong, miss, correct and timeout all consume a question; only correct damages',
     () async {
       final repo = Transport();
-      final p = ChapelPoint(repo, playerTeam: GameTeam.artStuff);
+      final p = GamePoint(
+        repo,
+        playerTeam: GameTeam.artStuff,
+        spot: testSpot(),
+      );
       final s = await CaptureSession.open(p, fix);
       final q = s.question.id;
       await kick(s);
@@ -176,7 +215,11 @@ void main() {
     'timer refresh advances automatically and catches up while away',
     () async {
       final repo = Transport();
-      final p = ChapelPoint(repo, playerTeam: GameTeam.artStuff);
+      final p = GamePoint(
+        repo,
+        playerTeam: GameTeam.artStuff,
+        spot: testSpot(),
+      );
       final s = await CaptureSession.open(p, fix);
       repo.expire(1);
       await s.refresh();
@@ -200,7 +243,11 @@ void main() {
       final repo = Transport()
         ..outcome = 'correct'
         ..loseResponse = true;
-      final p = ChapelPoint(repo, playerTeam: GameTeam.artStuff);
+      final p = GamePoint(
+        repo,
+        playerTeam: GameTeam.artStuff,
+        spot: testSpot(),
+      );
       final s = await CaptureSession.open(p, fix);
       await kick(s);
       expect(s.retryNeeded, true);
@@ -220,7 +267,11 @@ void main() {
     'another device resolving a question refreshes without repeating the kick',
     () async {
       final repo = Transport()..conflict = true;
-      final p = ChapelPoint(repo, playerTeam: GameTeam.artStuff);
+      final p = GamePoint(
+        repo,
+        playerTeam: GameTeam.artStuff,
+        spot: testSpot(),
+      );
       final s = await CaptureSession.open(p, fix);
       await kick(s);
       expect(s.retryNeeded, false);
@@ -238,7 +289,11 @@ void main() {
       final repo = Transport()
         ..hp = 6.25
         ..outcome = 'correct';
-      final p = ChapelPoint(repo, playerTeam: GameTeam.artStuff);
+      final p = GamePoint(
+        repo,
+        playerTeam: GameTeam.artStuff,
+        spot: testSpot(),
+      );
       final s = await CaptureSession.open(p, fix);
       await kick(s);
       expect(s.captured, true);
@@ -253,7 +308,11 @@ void main() {
     'resuming during a flight preserves the pending kick when its question is still current',
     () async {
       final repo = Transport()..outcome = 'correct';
-      final p = ChapelPoint(repo, playerTeam: GameTeam.artStuff);
+      final p = GamePoint(
+        repo,
+        playerTeam: GameTeam.artStuff,
+        spot: testSpot(),
+      );
       final session = await CaptureSession.open(p, fix);
       session.aiming();
       final shot = session.fire()!;
@@ -267,7 +326,11 @@ void main() {
     },
   );
   test('stale point responses cannot undo newer shared health', () {
-    final p = ChapelPoint(Transport(), playerTeam: GameTeam.artStuff);
+    final p = GamePoint(
+      Transport(),
+      playerTeam: GameTeam.artStuff,
+      spot: testSpot(),
+    );
     p.apply(const PointState(hp: 50, revision: 2));
     p.apply(const PointState(hp: 75, revision: 1));
     expect(p.state.hp, 50);
@@ -289,7 +352,11 @@ void main() {
     'point card and Attack use the same nested navigator; game is visible above card',
     (tester) async {
       final repo = Transport();
-      final p = ChapelPoint(repo, playerTeam: GameTeam.artStuff);
+      final p = GamePoint(
+        repo,
+        playerTeam: GameTeam.artStuff,
+        spot: testSpot(),
+      );
       await p.load();
       final inner = GlobalKey<NavigatorState>();
       CaptureSession? s;
@@ -304,7 +371,7 @@ void main() {
                   onPressed: () => showDialog<void>(
                     context: context,
                     useRootNavigator: false,
-                    builder: (_) => ChapelCard(
+                    builder: (_) => PointCard(
                       point: p,
                       reason: () => null,
                       distance: () => 0,
@@ -314,9 +381,9 @@ void main() {
                         await Navigator.of(context).push(
                           MaterialPageRoute(
                             builder: (_) => GameHost(
-                              gameId: 'chapel-football',
+                              gameId: 'free-kick',
                               session: GameSessionContext(
-                                spotId: ChapelConfig.id,
+                                spotId: s!.point.spotId,
                                 startedAt: DateTime.now(),
                                 capture: s,
                               ),
@@ -342,10 +409,10 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(seconds: 1));
       expect(find.text('Question 0'), findsOneWidget);
-      expect(find.byType(ChapelCard), findsNothing);
+      expect(find.byType(PointCard), findsNothing);
       await tester.tap(find.text('Close'));
       await tester.pumpAndSettle();
-      expect(find.byType(ChapelCard), findsOneWidget);
+      expect(find.byType(PointCard), findsOneWidget);
       await tester.pumpWidget(const SizedBox());
       s?.close();
       p.dispose();

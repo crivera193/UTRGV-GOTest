@@ -10,10 +10,10 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../teams/team_membership.dart';
 import '../games/live_attack_repository.dart';
+import '../games/point_catalog.dart';
 import '../games/game_host.dart';
-import '../games/chapel_capture.dart';
-import '../games/chapel_card.dart';
-import '../games/game_spot.dart';
+import '../games/point_attack.dart';
+import '../games/point_card.dart';
 import '../games/spot_proximity.dart';
 import '../map/campus_geography.dart';
 import '../map/campus_location.dart';
@@ -33,7 +33,8 @@ import '../player/cowboy_sprite.dart';
 import '../widgets/mapbox_configuration_notice.dart';
 
 class MapScreen extends StatefulWidget {
-  const MapScreen({super.key});
+  const MapScreen({super.key, this.pointRepository});
+  final PointCatalogRepository? pointRepository;
   @override
   State<MapScreen> createState() => _MapScreenState();
 }
@@ -69,7 +70,7 @@ class _MapScreenState extends State<MapScreen>
   bool _followBusy = false, _followQueued = false, _followNeedsZoom = false;
   CampusPoint? _lastFollowCenter;
   bool _foreground = true;
-  final _proximity = SpotProximity(configuredGameSpots);
+  final _proximity = SpotProximity(const []);
   final _kittyProximity = KittyIslandProximity();
   final _kittyPlacement = ValueNotifier<List<Offset>?>(null);
   late final LatestProjection<List<Offset>> _kittyProjector;
@@ -77,11 +78,12 @@ class _MapScreenState extends State<MapScreen>
     null,
   );
   late final LatestProjection<List<CampusCreaturePlacement>> _creatureProjector;
-  bool _gameOpen = false, _chapelCardOpen = false;
-  late final ChapelPoint _chapel;
-  bool _chapelInitialized = false;
-  final _chapelPlacement = ValueNotifier<Offset?>(null);
-  late final LatestProjection<Offset> _chapelProjector;
+  bool _gameOpen = false, _pointCardOpen = false, _pointsInitialized = false;
+  late final PointCatalog _points;
+  GamePoint? _openPoint;
+  CaptureSession? _activeAttack;
+  final _pointPlacements = ValueNotifier<Map<String, Offset>?>(null);
+  late final LatestProjection<Map<String, Offset>> _pointProjector;
 
   @override
   void initState() {
@@ -115,17 +117,31 @@ class _MapScreenState extends State<MapScreen>
         if (mounted) _kittyPlacement.value = value;
       },
     );
-    _chapelProjector = LatestProjection<Offset>(
+    _pointProjector = LatestProjection<Map<String, Offset>>(
       read: () async {
-        if (_map == null || !_styleLoaded || !_foreground) return null;
-        final pixel = await _map!.pixelForCoordinate(
-          _point(ChapelConfig.point),
+        final map = _map;
+        if (map == null ||
+            !_styleLoaded ||
+            !_foreground ||
+            !_pointsInitialized) {
+          return null;
+        }
+        final snapshot = _points.points;
+        if (snapshot.isEmpty) return const {};
+        final pixels = await map.pixelsForCoordinates(
+          snapshot.map((p) => _point(p.point)).toList(),
         );
-        if (!pixel.x.isFinite || !pixel.y.isFinite) return null;
-        return Offset(pixel.x, pixel.y);
+        final positions = <String, Offset>{};
+        for (var i = 0; i < snapshot.length; i++) {
+          final pixel = pixels[i];
+          if (pixel != null && pixel.x.isFinite && pixel.y.isFinite) {
+            positions[snapshot[i].id] = Offset(pixel.x, pixel.y);
+          }
+        }
+        return positions;
       },
       apply: (value) {
-        if (mounted) _chapelPlacement.value = value;
+        if (mounted) _pointPlacements.value = value;
       },
     );
     _projector = LatestProjection<CowboyPlacement>(
@@ -141,14 +157,34 @@ class _MapScreenState extends State<MapScreen>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (!_chapelInitialized) {
-      _chapelInitialized = true;
-      _chapel = ChapelPoint(
-        SupabaseAttackRepository(Supabase.instance.client),
-        playerTeam: TeamScope.of(context).team!,
+    if (!_pointsInitialized) {
+      _pointsInitialized = true;
+      _points = PointCatalog(
+        widget.pointRepository ??
+            SupabasePointCatalogRepository(Supabase.instance.client),
       );
-      unawaited(_chapel.load());
+      _points.addListener(_pointsChanged);
+      unawaited(_points.load());
     }
+  }
+
+  void _pointsChanged() {
+    if (!mounted) return;
+    _proximity.replaceSpots(_points.points, DateTime.now());
+    final open = _openPoint;
+    if (open != null) {
+      final next = _points.find(open.spotId);
+      if (next == null) {
+        open.retire();
+        unawaited(_activeAttack?.refresh());
+      } else {
+        final moved = next.playVersion != open.spot.playVersion;
+        open.applyDefinition(next);
+        if (moved) unawaited(_activeAttack?.refresh());
+      }
+    }
+    setState(() {});
+    unawaited(_pointProjector.request(invalidate: true));
   }
 
   Future<void> _loadCampus() async {
@@ -232,7 +268,7 @@ class _MapScreenState extends State<MapScreen>
       if (!mounted) return;
       final pixelRatio = MediaQuery.devicePixelRatioOf(context);
       await _renderPlayer();
-      await _chapelProjector.request(invalidate: true);
+      await _pointProjector.request(invalidate: true);
       await _buildingLabels.install(_map!, _buildingNames, (building) {
         if (mounted && _foreground && !_gameOpen) {
           setState(() => _selectedBuilding = building);
@@ -377,7 +413,7 @@ class _MapScreenState extends State<MapScreen>
     _cameraState = event.cameraState;
     _syncBuildingCreatures();
     _syncKittyCats();
-    unawaited(_chapelProjector.request(invalidate: true));
+    unawaited(_pointProjector.request(invalidate: true));
     if (_hasFitted && !_fitting) {
       _cameraSession.rememberZoom(event.cameraState.zoom);
     }
@@ -768,7 +804,8 @@ class _MapScreenState extends State<MapScreen>
     } else if (state == AppLifecycleState.resumed) {
       _foreground = true;
       _syncBuildingCreatures();
-      if (_chapelInitialized) unawaited(_chapel.load());
+      if (_pointsInitialized) unawaited(_points.load());
+      if (_openPoint case final GamePoint open) unawaited(open.load());
       if (_locationEnabled) unawaited(_resumeGps());
     }
   }
@@ -782,55 +819,118 @@ class _MapScreenState extends State<MapScreen>
     }
   }
 
-  String? _chapelAttackReason() {
-    if (_chapel.busy) return 'Connecting to live point…';
-    if (!_foreground || !_chapel.loaded) {
-      return _chapel.error ?? 'Loading live point…';
+  String? _pointAttackReason(GamePoint point) {
+    if (point.busy) return 'Connecting to live point…';
+    if (point.retired || _points.find(point.spotId) == null) {
+      return 'This point has been removed or disabled.';
     }
-    if (_chapel.error != null) return _chapel.error;
-    if (_chapel.cooldownReason != null) return _chapel.cooldownReason;
+    if (!_foreground || !point.loaded) {
+      return point.error ?? 'Loading live point…';
+    }
+    if (_points.error != null) return _points.error;
+    if (point.error != null) return point.error;
+    if (!gameRegistry.containsKey(point.spot.gameId)) {
+      return 'This game is unavailable in this app version.';
+    }
+    if (point.cooldownReason != null) return point.cooldownReason;
     if (_location?.state != CampusGpsState.onCampus) {
       return 'Enable GPS and move safely onto campus.';
     }
-    return _proximity.attackReason(chapelSpot, DateTime.now());
+    return _proximity.attackReason(point.spot, DateTime.now());
   }
 
-  Future<void> _showChapel() async {
-    if (_chapelCardOpen || _gameOpen) return;
-    _chapelCardOpen = true;
+  Future<void> _showPoint(LiveGamePoint spot) async {
+    if (_pointCardOpen || _gameOpen) return;
+    _pointCardOpen = true;
+    final point = GamePoint(
+      SupabaseAttackRepository(Supabase.instance.client),
+      playerTeam: TeamScope.of(context).team!,
+      spot: spot,
+    );
+    _openPoint = point;
+    unawaited(point.load());
     try {
       await showDialog<void>(
         context: context,
         useRootNavigator: false,
-        builder: (_) => ChapelCard(
-          point: _chapel,
-          reason: _chapelAttackReason,
-          distance: () => _proximity.distanceTo(chapelSpot),
-          onAttack: _attackChapel,
+        builder: (_) => PointCard(
+          point: point,
+          reason: () => _pointAttackReason(point),
+          distance: () => _proximity.distanceTo(point.spot),
+          onAttack: () => _attackPoint(point),
         ),
       );
     } finally {
-      _chapelCardOpen = false;
+      if (_openPoint == point) _openPoint = null;
+      point.dispose();
+      _pointCardOpen = false;
     }
   }
 
-  Future<void> _attackChapel() async {
-    if (_gameOpen || _chapelAttackReason() != null || _chapel.friendly) {
+  Future<void> _showPoints() async {
+    if (_pointCardOpen || _gameOpen) return;
+    final id = await showModalBottomSheet<String>(
+      context: context,
+      useRootNavigator: false,
+      showDragHandle: true,
+      builder: (_) => SafeArea(
+        child: ListenableBuilder(
+          listenable: _points,
+          builder: (context, _) => ListView(
+            shrinkWrap: true,
+            children: [
+              const ListTile(title: Text('Game points')),
+              if (_points.error != null)
+                ListTile(
+                  title: Text(_points.error!),
+                  trailing: TextButton(
+                    onPressed: _points.load,
+                    child: const Text('Retry'),
+                  ),
+                )
+              else if (!_points.loaded)
+                const ListTile(title: Text('Loading game points…'))
+              else if (_points.points.isEmpty)
+                const ListTile(
+                  title: Text('No game points are available yet.'),
+                ),
+              for (final point in _points.points)
+                ListTile(
+                  key: ValueKey('point-list-${point.id}'),
+                  title: Text(point.name),
+                  subtitle: Text(
+                    '${point.state.owner} · ${point.state.healthLabel} health',
+                  ),
+                  onTap: () => Navigator.of(context).pop(point.id),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (!mounted || id == null) return;
+    final point = _points.find(id);
+    if (point != null) await _showPoint(point);
+  }
+
+  Future<void> _attackPoint(GamePoint point) async {
+    if (_gameOpen || _pointAttackReason(point) != null || point.friendly) {
       return;
     }
-    if (!_proximity.launchAttack(chapelSpot, DateTime.now())) return;
+    if (!_proximity.launchAttack(point.spot, DateTime.now())) return;
     final wasFollowing = _following;
     CaptureSession? attack;
     setState(() => _gameOpen = true);
     try {
-      attack = await CaptureSession.open(_chapel, _proximity.currentFix!);
+      attack = await CaptureSession.open(point, _proximity.currentFix!);
+      _activeAttack = attack;
       if (!mounted) return;
       await Navigator.of(context).push<GameExit>(
         MaterialPageRoute(
           builder: (_) => GameHost(
-            gameId: 'chapel-football',
+            gameId: point.spot.gameId,
             session: GameSessionContext(
-              spotId: ChapelConfig.id,
+              spotId: point.spotId,
               startedAt: DateTime.now(),
               capture: attack,
             ),
@@ -839,7 +939,8 @@ class _MapScreenState extends State<MapScreen>
       );
     } finally {
       attack?.close();
-      unawaited(_chapel.load());
+      _activeAttack = null;
+      unawaited(point.load());
       _proximity.close(DateTime.now());
       if (mounted) {
         setState(() {
@@ -852,7 +953,9 @@ class _MapScreenState extends State<MapScreen>
   }
 
   Future<void> _openGame() async {
-    await _showChapel();
+    final id = _proximity.selected?.id;
+    final spot = id == null ? null : _points.find(id);
+    if (spot != null) await _showPoint(spot);
   }
 
   @override
@@ -863,9 +966,13 @@ class _MapScreenState extends State<MapScreen>
     _travelTicker.dispose();
     _projector.dispose();
     _cowboyPlacement.dispose();
-    if (_chapelInitialized) _chapel.dispose();
-    _chapelProjector.dispose();
-    _chapelPlacement.dispose();
+    if (_pointsInitialized) {
+      _points.removeListener(_pointsChanged);
+      _points.dispose();
+    }
+    _activeAttack?.close();
+    _pointProjector.dispose();
+    _pointPlacements.dispose();
     _kittyProjector.dispose();
     _kittyPlacement.dispose();
     _creatureProjector.dispose();
@@ -1075,30 +1182,32 @@ class _MapScreenState extends State<MapScreen>
                     ),
                   ),
                 ),
-              if (_ready)
-                ValueListenableBuilder<Offset?>(
-                  valueListenable: _chapelPlacement,
-                  builder: (context, position, _) {
-                    if (position == null ||
-                        position.dx < 0 ||
-                        position.dy < 0 ||
-                        position.dx > (_size?.width ?? 0) ||
-                        position.dy > (_size?.height ?? 0)) {
-                      return const SizedBox.shrink();
-                    }
-                    return Positioned(
-                      left: position.dx - 38,
-                      top: position.dy - 88,
-                      width: 76,
-                      child: ListenableBuilder(
-                        listenable: _chapel,
-                        builder: (context, _) => ChapelBeacon(
-                          owner: _chapel.state.owner,
-                          onTap: _showChapel,
-                        ),
-                      ),
-                    );
-                  },
+              if (_ready && _pointsInitialized)
+                ValueListenableBuilder<Map<String, Offset>?>(
+                  valueListenable: _pointPlacements,
+                  builder: (context, positions, _) => Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      if (positions != null)
+                        for (final point in _points.points)
+                          if (positions[point.id] case final Offset position)
+                            if (position.dx >= 0 &&
+                                position.dy >= 0 &&
+                                position.dx <= (_size?.width ?? 0) &&
+                                position.dy <= (_size?.height ?? 0))
+                              Positioned(
+                                left: position.dx - 55,
+                                top: position.dy - 112,
+                                width: 110,
+                                child: PointBeacon(
+                                  key: ValueKey('point-beacon-${point.id}'),
+                                  name: point.name,
+                                  owner: point.state.owner,
+                                  onTap: () => _showPoint(point),
+                                ),
+                              ),
+                    ],
+                  ),
                 ),
               CowboySprite(
                 key: const ValueKey('persistent-campus-cowboy'),
@@ -1152,9 +1261,15 @@ class _MapScreenState extends State<MapScreen>
                     runSpacing: 4,
                     children: [
                       FilledButton.tonalIcon(
-                        onPressed: _showChapel,
+                        onPressed: _showPoints,
                         icon: const Icon(Icons.flag_outlined),
-                        label: const Text('Chapel Point'),
+                        label: Text(
+                          _points.error != null
+                              ? 'Points unavailable'
+                              : !_points.loaded
+                              ? 'Loading points…'
+                              : 'Game points (${_points.points.length})',
+                        ),
                       ),
                       FilledButton.tonalIcon(
                         onPressed: () => unawaited(_showOverview()),

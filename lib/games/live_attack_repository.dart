@@ -1,7 +1,8 @@
 import 'dart:ui';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../map/campus_location.dart';
-import 'chapel_capture.dart';
+import 'point_attack.dart';
+import 'point_catalog.dart';
 
 /// All combat authority lives in Supabase. No device-local fallback or answer key.
 class SupabaseAttackRepository implements AttackRepository {
@@ -36,26 +37,27 @@ class SupabaseAttackRepository implements AttackRepository {
     await _rpc('point_attack_access', {'spot_id': spotId}),
   );
   @override
-  Future<PointState> loadPoint(String spotId) async {
+  Future<LiveGamePoint> loadPoint(String spotId) async {
     _check();
     final value = await client
         .from('game_spots')
-        .select()
+        .select('*, rules:game_rule_sets(*)')
         .eq('id', spotId)
         .single();
     _check();
-    return PointState.fromJson(value);
+    return LiveGamePoint.fromJson(value);
   }
 
   @override
-  Stream<PointState> watchPoint(String spotId) => client
-      .from('game_spots')
-      .stream(primaryKey: ['id'])
-      .eq('id', spotId)
-      .map((rows) {
+  Stream<LiveGamePoint> watchPoint(String spotId) =>
+      SupabasePointCatalogRepository(client, includeTest: true).watch().map((
+        points,
+      ) {
         _check();
-        if (rows.length != 1) throw StateError('Point unavailable.');
-        return PointState.fromJson(rows.single);
+        for (final p in points) {
+          if (p.id == spotId) return p;
+        }
+        throw StateError('Point removed or disabled.');
       });
   @override
   Future<AttackState> begin(

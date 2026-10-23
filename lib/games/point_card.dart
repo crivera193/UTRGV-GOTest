@@ -1,12 +1,17 @@
 import 'dart:async';
 import '../teams/game_team.dart';
 import 'package:flutter/material.dart';
-import 'chapel_capture.dart';
+import 'point_attack.dart';
 
 /// Original ring, suspended diamond and pedestal; owner is conveyed in text too.
-class ChapelBeacon extends StatelessWidget {
-  const ChapelBeacon({super.key, required this.owner, this.onTap});
-  final String owner;
+class PointBeacon extends StatelessWidget {
+  const PointBeacon({
+    super.key,
+    required this.owner,
+    required this.name,
+    this.onTap,
+  });
+  final String owner, name;
   final VoidCallback? onTap;
   @override
   Widget build(BuildContext context) {
@@ -14,7 +19,7 @@ class ChapelBeacon extends StatelessWidget {
         ? Colors.grey
         : GameTeam.values.firstWhere((t) => t.displayName == owner).color;
     return Semantics(
-      label: 'Chapel Point, $owner. Open point card',
+      label: '$name, $owner. Open point card',
       button: true,
       child: InkWell(
         onTap: onTap,
@@ -54,7 +59,7 @@ class ChapelBeacon extends StatelessWidget {
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
-                owner,
+                '$name\n$owner',
                 style: TextStyle(
                   color: color,
                   fontSize: 12,
@@ -69,8 +74,8 @@ class ChapelBeacon extends StatelessWidget {
   }
 }
 
-class ChapelCard extends StatefulWidget {
-  const ChapelCard({
+class PointCard extends StatefulWidget {
+  const PointCard({
     super.key,
     required this.point,
     required this.reason,
@@ -78,16 +83,16 @@ class ChapelCard extends StatefulWidget {
     required this.onAttack,
     this.debug = false,
   });
-  final ChapelPoint point;
+  final GamePoint point;
   final String? Function() reason;
   final double? Function() distance;
   final Future<void> Function() onAttack;
   final bool debug;
   @override
-  State<ChapelCard> createState() => _ChapelCardState();
+  State<PointCard> createState() => _PointCardState();
 }
 
-class _ChapelCardState extends State<ChapelCard> {
+class _PointCardState extends State<PointCard> {
   Timer? _timer;
   bool _launching = false;
   String? _error;
@@ -117,6 +122,8 @@ class _ChapelCardState extends State<ChapelCard> {
           ? 'Connecting to live point…'
           : widget.point.friendly
           ? 'Your team controls this point'
+          : widget.point.retired
+          ? 'This point has been removed or disabled.'
           : !widget.point.loaded
           ? 'Loading live point…'
           : widget.point.error ??
@@ -125,7 +132,7 @@ class _ChapelCardState extends State<ChapelCard> {
       return Dialog.fullscreen(
         child: Scaffold(
           appBar: AppBar(
-            title: const Text(ChapelConfig.name),
+            title: Text(widget.point.spot.name),
             automaticallyImplyLeading: false,
             actions: [
               TextButton(
@@ -139,40 +146,47 @@ class _ChapelCardState extends State<ChapelCard> {
               padding: const EdgeInsets.all(24),
               child: Column(
                 children: [
-                  Container(
-                    width: 220,
-                    height: 220,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: const Color(0xffe5f2e9),
-                      border: Border.all(
-                        color: const Color(0xff59998d),
-                        width: 3,
+                  if (widget.point.spot.imageUrl case final String url)
+                    Image.network(
+                      url,
+                      height: 220,
+                      width: 220,
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, _, _) =>
+                          const Icon(Icons.location_on_outlined, size: 85),
+                    )
+                  else
+                    Container(
+                      width: 220,
+                      height: 220,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: const Color(0xffe5f2e9),
+                        border: Border.all(
+                          color: const Color(0xff59998d),
+                          width: 3,
+                        ),
+                      ),
+                      child: const Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.location_on_outlined,
+                            size: 85,
+                            color: Color(0xff487469),
+                          ),
+                          Text('Campus point', style: TextStyle(fontSize: 12)),
+                        ],
                       ),
                     ),
-                    child: const Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.location_city_outlined,
-                          size: 85,
-                          color: Color(0xff487469),
-                        ),
-                        Text(
-                          'PLACEHOLDER IMAGE',
-                          style: TextStyle(fontSize: 12),
-                        ),
-                      ],
-                    ),
-                  ),
                   const SizedBox(height: 20),
                   Text(
-                    ChapelConfig.name,
+                    widget.point.spot.name,
                     style: Theme.of(context).textTheme.headlineMedium,
                   ),
                   const SizedBox(height: 8),
-                  const Text(
-                    ChapelConfig.description,
+                  Text(
+                    widget.point.spot.description,
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 16),
@@ -182,8 +196,8 @@ class _ChapelCardState extends State<ChapelCard> {
                   ),
                   Text('Your team: ${widget.point.playerTeam.displayName}'),
                   const Text('Ownership and damage are saved online.'),
-                  const Text(
-                    '4 questions · 15 seconds each\nUp to 25% damage · one attempt every 10 minutes',
+                  Text(
+                    widget.point.spot.rules.summary,
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 16),
@@ -196,7 +210,7 @@ class _ChapelCardState extends State<ChapelCard> {
                   Text(
                     d == null
                         ? 'Distance unavailable · enable foreground GPS'
-                        : '${d.toStringAsFixed(1)} m away · attack within 130 ft',
+                        : '${d.toStringAsFixed(1)} m away · attack within ${healthText(widget.point.spot.attackMeters!)} m',
                   ),
                   const SizedBox(height: 16),
                   Text(

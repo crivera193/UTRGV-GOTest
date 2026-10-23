@@ -1,3 +1,40 @@
+# Dynamic live points and rules — October 22, 2026
+
+Supabase now owns the live point catalog and editable rule sets. The map, invitation/proximity checks, point list, card and free-kick game use reusable point models. There is no compiled production point list, chapel coordinate/configuration or device-local combat fallback. Stable point `echap-local-v1` remains in Supabase with its existing location, ownership, health and history.
+
+## Managing live content
+
+Use the authenticated Supabase Table Editor in project `oipidltfvzodpiumdsaq`:
+
+- `public.game_spots`: add a stable unique `id`, name and latitude/longitude; edit description, optional HTTPS image, entry/exit/attack radii, maximum health and `rule_set_id`. `game_id` is `free-kick`, the currently supported executable game. Additional game algorithms still require application implementation. Keep production points inside the approved campus area and verify safe pedestrian access. Existing IDs must remain stable when moving or renaming.
+- `public.game_rule_sets`: edit question count, seconds per question, maximum attempt damage percentage and cooldown seconds. Supported ranges are 1–20 questions, 1–300 seconds, greater than 0 through 100% maximum damage, and 0–86400 cooldown seconds. Rules can be shared across points or assigned separately. Versions and timestamps advance automatically.
+- To remove a referenced point, set `enabled=false`; this removes its marker/list entry and prevents attacks while preserving history, ownership and account cooldowns. Re-enabling the same ID preserves those records. Avoid destructive deletion or replacing IDs to move a point.
+- Questions remain in private `app_private.question_bank`. Keep the four labeled production placeholders until the owner provides the real bank. New attempts snapshot randomly selected prompts and shuffled choices; correct answers never appear in public payloads.
+
+The `standard` rule set remains **4 questions × 15 seconds, maximum 25% damage and a 600-second entry cooldown**. A correct standard kick deals 6.25%. Wrong answers, misses and timeouts deal zero and advance. The final damaging player's permanent team wins and full health is restored. Configurability does not change these current standard settings.
+
+The app subscribes to point and rule changes through Supabase Realtime, including transitions to disabled. It also reloads on foreground return. Loading, empty catalog, connection failure, unsupported game and retired-point states are explicit. The map projects the whole current catalog with a batched native Mapbox call. Names, descriptions, optional images, owner badges and health update from live data. QA point rows remain hidden from ordinary players and excluded by the normal catalog.
+
+Each attempt snapshots its rule set, starting maximum health, point play version and absolute cooldown end. Edits affect new attempts; already-started attempts retain their original question count, timers, damage budget and cooldown. Cumulative numeric rounding makes a perfect attempt reach the configured budget exactly, even when it is not evenly divisible by question count. Moving or disabling a point invalidates active attempts, without erasing earned damage or cooldown history. Deadlines continue while away; authority, receipt idempotency and answer adjudication remain on the server.
+
+Migration `20261022210000_dynamic_points_and_rules.sql` was applied successfully to the live project through the authenticated crivera193 dashboard. Do not replay it. Ordinary authenticated clients have read-only access to public point/rule tables and cannot change health, rules or private answers.
+
+## Observed verification
+
+Analysis is clean and **77 Flutter tests passed**. Live REST checks on isolated QA fixtures verified a seven-question, 120-second, 30%/180-second attempt continuing under its original rules after an admin edit to three questions, eight seconds and 40%/60 seconds. A perfect seven-question attempt removed exactly 36 of 120 HP; a new account used the edited rules and dealt 16 HP for one correct answer, with zero for wrong/missed answers. Moves/disabling invalidated attacks; receipt retries and direct-write restrictions remained enforced. Four real synthetic accounts then captured a fresh standard point in 25% contributions, with the final Math and Engineering player's ownership visible to every client. Real campus point HP and coordinates were not changed by the tests.
+
+On UTRGV_GO_Preview / emulator-5554, Android x86_64 at 1080×2400, test build 12026/versionCode 16026 received point additions, moves, renames, rule edits and disabling in the same running app without rebuilding. Rendered marker positions/names and the native card were checked. The test launcher initially lacked its normal Material container; that launcher was corrected and the successful native checks repeated. [Updated card](evidence/dynamic-points/card-rules.png), [map before](evidence/dynamic-points/map-before.png), [retired points](evidence/dynamic-points/map-retired.png).
+
+A custom three-question/nine-second game displayed its server timer, auto-advanced a real timeout and accepted actual Flutter pointer input through the free-kick physics. One correct kick removed 10% under its 30% maximum. The process was fully stopped with no remaining PID; a later COLD launch preserved 90% HP, the rule snapshot and entry cooldown, with both unanswered questions recorded as timeouts and the attempt completed. [Timer](evidence/dynamic-points/custom-timer.png), [cold restart](evidence/dynamic-points/cold-restart.png).
+
+The normal app was restored using fresh build 12027/versionCode 16027, installed in place with the same signing certificate. Pulled installed APK SHA-256 matched the built artifact: `59cf984e9fb6f03a2fe9af08cbfc46a42778cd5a96d6d7f1942d1b020d14cdb8`. Normal and QA auth storage remain separate. The normal account already had a profile but no team membership; the owner confirmed they had not selected a team. Its selection screen is therefore expected until its first confirmation. QA accounts retained their memberships across restarts. No permanent choice was made for the owner's account.
+
+Reproduction: provision fresh isolated IDs using `supabase/tests/dynamic_points_fixture.sql` as a template (do not replay existing fixture inserts or reset cooldowns). `test_driver/dynamic_points_rest.py start|edited|capture` runs authenticated server checks; between start and edited, change only the QA custom rules, move the QA move point and disable the QA disable point. Native phases use `test_driver/dynamic_points_flow.dart catalog-start|catalog-edited|catalog-disabled|play|resume` with `test_driver/team_app.dart` and the ignored synthetic configuration. Apply QA map/rule edits between catalog phases; force-stop and reconnect the new VM endpoint between play and resume. Tokens, credentials and VM URLs stay ignored. The feature remains on `codex/live-attacks` for owner review; unrelated map/cowboy working changes are excluded from the source commit but included in the combined emulator build. No iOS build or real outdoor GPS acceptance was performed. Existing Mapbox/Kotlin future-toolchain warnings remain.
+
+---
+
+Historical fixed-default implementation record (the defaults remain current; editable configuration above supersedes fixed values):
+
 # Timed point attacks — October 22, 2026
 
 Current owner rules supersede the earlier unlimited attack record below. Every attack contains **four questions**, **15 seconds each**, and can deal **at most 25% of maximum point health**. Each correct kick deals exactly 6.25%; wrong answers, misses and timeouts deal zero. All outcomes advance automatically, with no Continue pause. The attempt ends after four resolved questions or an earlier capture. A ten-minute cooldown per account and point starts at entry; closing the game, switching devices, or a change of ownership does not clear it. An unfinished attempt resumes with its original deadlines. Unanswered questions continue expiring while the app is away; elapsed slots are reconciled on the next authenticated server read.

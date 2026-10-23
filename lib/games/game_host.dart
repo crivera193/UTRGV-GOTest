@@ -1,6 +1,6 @@
 import 'dart:math' as math;
-import 'chapel_capture.dart';
-import 'chapel_football_game.dart';
+import 'point_attack.dart';
+import 'free_kick_game.dart';
 import 'package:flame/cache.dart';
 import 'package:flame/game.dart';
 import 'package:flutter/material.dart';
@@ -82,7 +82,7 @@ class PreviewGame extends SessionGame {
 }
 
 final Map<String, SessionFactory> gameRegistry = Map.unmodifiable({
-  'chapel-football': ChapelFootballGame.new,
+  'free-kick': FreeKickGame.new,
 });
 
 class GameHost extends StatefulWidget {
@@ -242,13 +242,13 @@ class _GameHostState extends State<GameHost>
                       if (widget.session.debug)
                         const Text('DEBUG ONLY · no GPS eligibility'),
                       Text(
-                        'Chapel Point · ${attack.point.state.healthLabel} health',
+                        '${attack.point.spot.name} · ${attack.point.state.healthLabel} health',
                         style: const TextStyle(fontWeight: FontWeight.bold),
                       ),
                       Text(
                         attack.phase == AttackPhase.sessionEnded
-                            ? '${attack.correct}/4 correct · ${attack.damagePercent}% damage'
-                            : 'Question ${attack.questionNumber}/4 · ${attack.secondsRemaining}s',
+                            ? '${attack.correct}/${attack.rules.questionsTotal} correct · ${attack.damagePercent}% damage'
+                            : 'Question ${attack.questionNumber}/${attack.rules.questionsTotal} · ${attack.secondsRemaining}s',
                         key: const ValueKey('attack-timer'),
                       ),
                       Text(

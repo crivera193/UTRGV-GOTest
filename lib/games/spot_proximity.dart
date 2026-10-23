@@ -15,7 +15,32 @@ enum SpotState {
 /// Never reads a map camera, smoothed marker, or starts a location subscription.
 class SpotProximity {
   SpotProximity(this.spots);
-  final List<GameSpot> spots;
+  List<GameSpot> spots;
+  void replaceSpots(List<GameSpot> next, DateTime now) {
+    final old = {for (final s in spots) s.id: s};
+    final valid = next.where((s) => s.enabled).map((s) => s.id).toSet();
+    for (final s in next) {
+      final before = old[s.id];
+      if (before == null ||
+          before.point.latitude != s.point.latitude ||
+          before.point.longitude != s.point.longitude ||
+          before.entryMeters != s.entryMeters ||
+          before.exitMeters != s.exitMeters) {
+        _inside.remove(s.id);
+        _enteredAt.remove(s.id);
+        _exitAt.remove(s.id);
+        _suppressed.remove(s.id);
+      }
+    }
+    _inside.removeWhere((id) => !valid.contains(id));
+    _suppressed.removeWhere((id) => !valid.contains(id));
+    _enteredAt.removeWhere((id, _) => !valid.contains(id));
+    _exitAt.removeWhere((id, _) => !valid.contains(id));
+    spots = List.unmodifiable(next);
+    selected = next.where((s) => s.id == selected?.id && s.enabled).firstOrNull;
+    _evaluate(now);
+  }
+
   SpotState state = SpotState.unavailable;
   GameSpot? selected;
   final _enteredAt = <String, DateTime>{};
@@ -59,7 +84,7 @@ class SpotProximity {
     if (!_onCampus) return 'A confirmed on-campus GPS fix is required.';
     if (_distance(spot) + _fix!.accuracy >
         (spot.attackMeters ?? spot.entryMeters)) {
-      return 'Move within 130 ft (39.624 m), including GPS uncertainty. Stay on a safe outdoor path.';
+      return 'Move within ${spot.attackMeters ?? spot.entryMeters} m, including GPS uncertainty. Stay on a safe outdoor path.';
     }
     return null;
   }
@@ -187,7 +212,12 @@ class SpotProximity {
   }
 
   bool launchAttack(GameSpot spot, DateTime now) {
-    if (active || attackReason(spot, now) != null) return false;
+    if (active ||
+        !spot.enabled ||
+        !spots.any((s) => s.id == spot.id && s.enabled) ||
+        attackReason(spot, now) != null) {
+      return false;
+    }
     _suppressArrival();
     selected = spot;
     _activeSpotId = spot.id;

@@ -2,22 +2,13 @@ import 'dart:async';
 import 'dart:math';
 import 'dart:ui';
 import 'package:flutter/foundation.dart';
-import '../map/campus_geography.dart';
 import '../map/campus_location.dart';
 import '../teams/game_team.dart';
 
-abstract final class ChapelConfig {
-  static const id = 'echap-local-v1', name = 'Chapel Point';
-  static const point = CampusPoint(-98.174683, 26.305357);
-  static const description =
-      'Play from a safe outdoor path or the chapel lawn; never enter the building to play.';
-  static const maxHp = 100, questionsPerAttack = 4;
-  static const questionSeconds = 15, cooldownMinutes = 10;
-  static const attackMeters = 39.624;
-}
-
-String healthText(num value) =>
-    value.toStringAsFixed(2).replaceFirst(RegExp(r'\.?0+$'), '');
+import 'game_spot.dart';
+import 'game_rules.dart';
+export 'game_spot.dart';
+export 'game_rules.dart';
 
 String attackCommandId() {
   final r = Random.secure();
@@ -47,34 +38,14 @@ class QuizQuestion {
   String answerId(int index) => choices[index]['id'] as String;
 }
 
-class PointState {
-  const PointState({
-    this.ownerTeamId,
-    this.hp = 100,
-    this.maxHp = 100,
-    this.revision = 0,
-  });
-  factory PointState.fromJson(Map<String, dynamic> j) => PointState(
-    ownerTeamId: j['owner_team_id'] as String?,
-    hp: (j['hp'] as num).toDouble(),
-    maxHp: j['max_hp'] as int,
-    revision: j['revision'] as int,
-  );
-  final String? ownerTeamId;
-  final double hp;
-  final int maxHp, revision;
-  double get healthPercent => hp / maxHp * 100;
-  String get healthLabel => '${healthText(healthPercent)}%';
-  String get owner => ownerTeamId == null
-      ? 'Unclaimed'
-      : GameTeam.fromId(ownerTeamId!).displayName;
-}
-
 class AttackState {
   AttackState.fromJson(Map<String, dynamic> j)
     : id = j['id'] as String,
       status = j['status'] as String,
       sequence = j['sequence'] as int,
+      rules = AttackRules.fromJson(
+        Map<String, dynamic>.from(j['rules'] as Map),
+      ),
       correct = j['correct_count'] as int,
       losses =
           (j['wrong_count'] as int) +
@@ -85,16 +56,19 @@ class AttackState {
       cooldownUntil = DateTime.parse(j['cooldown_until'] as String),
       dueAt = DateTime.parse((j['question'] as Map)['due_at'] as String),
       lastOutcome = j['last_outcome'] as String?,
-      point = PointState.fromJson(Map<String, dynamic>.from(j['point'] as Map)),
+      point = LiveGamePoint.fromJson(
+        Map<String, dynamic>.from(j['point'] as Map),
+      ),
       question = QuizQuestion.fromJson(
         Map<String, dynamic>.from(j['question'] as Map),
       );
   final String id, status;
   final int sequence, correct, losses;
+  final AttackRules rules;
   final double damageDealt;
   final DateTime serverNow, cooldownUntil, dueAt;
   final String? lastOutcome;
-  final PointState point;
+  final LiveGamePoint point;
   final QuizQuestion question;
   bool get active => status == 'active';
 }
@@ -122,9 +96,9 @@ class AttackAccess {
 }
 
 abstract interface class AttackRepository {
-  Future<PointState> loadPoint(String spotId);
+  Future<LiveGamePoint> loadPoint(String spotId);
   Future<AttackAccess> access(String spotId);
-  Stream<PointState> watchPoint(String spotId);
+  Stream<LiveGamePoint> watchPoint(String spotId);
   Future<AttackState> begin(String spotId, CampusFix fix, String requestId);
   Future<AttackState> read(String attackId);
   Future<Map<String, dynamic>> kick(
@@ -135,19 +109,24 @@ abstract interface class AttackRepository {
   );
 }
 
-class ChapelPoint extends ChangeNotifier {
-  ChapelPoint(
+class GamePoint extends ChangeNotifier {
+  GamePoint(
     this.repository, {
     required this.playerTeam,
-    this.spotId = ChapelConfig.id,
-  });
+    required LiveGamePoint spot,
+    // Keep the public parameter independent of the private mutable field.
+    // ignore: prefer_initializing_formals
+  }) : _spot = spot;
   final AttackRepository repository;
   final GameTeam playerTeam;
-  final String spotId;
-  PointState state = const PointState();
+  LiveGamePoint _spot;
+  LiveGamePoint get spot => _spot;
+  String get spotId => _spot.id;
+  PointState get state => _spot.state;
+  bool retired = false;
   bool loaded = false, busy = false, _disposed = false;
   String? error;
-  StreamSubscription<PointState>? _subscription;
+  StreamSubscription<LiveGamePoint>? _subscription;
   AttackAccess? _access;
   final _accessClock = Stopwatch();
   bool get canResume => _access?.canResume ?? false;
@@ -158,7 +137,7 @@ class ChapelPoint extends ChangeNotifier {
                 _accessClock.elapsedMilliseconds) /
             1000)
         .ceil()
-        .clamp(0, 600);
+        .clamp(0, 86400);
   }
 
   String? get cooldownReason {
@@ -177,9 +156,34 @@ class ChapelPoint extends ChangeNotifier {
   bool get friendly => state.ownerTeamId == playerTeam.id;
   void apply(PointState next) {
     if (_disposed) return;
-    if (!loaded || next.revision >= state.revision) state = next;
+    if (!loaded || next.revision >= state.revision) {
+      _spot = _spot.withState(next);
+    }
     loaded = true;
     error = null;
+    notifyListeners();
+  }
+
+  void applyDefinition(LiveGamePoint next) {
+    if (_disposed) return;
+    if (!loaded || next.state.revision >= state.revision) {
+      _spot = next;
+    } else {
+      _spot = LiveGamePoint.fromJson({
+        ..._spot.toJson(),
+        'rules': next.rules.toJson(),
+      });
+    }
+    retired = !next.enabled;
+    loaded = true;
+    error = null;
+    notifyListeners();
+  }
+
+  void retire() {
+    if (_disposed) return;
+    retired = true;
+    error = 'This point has been removed or disabled.';
     notifyListeners();
   }
 
@@ -189,14 +193,14 @@ class ChapelPoint extends ChangeNotifier {
         repository.loadPoint(spotId),
         repository.access(spotId),
       ]);
-      final next = results[0] as PointState;
+      final next = results[0] as LiveGamePoint;
       if (_disposed) return;
       applyAccess(results[1] as AttackAccess);
-      apply(next);
+      applyDefinition(next);
       _subscription ??= repository
           .watchPoint(spotId)
           .listen(
-            apply,
+            applyDefinition,
             onError: (Object _) {
               if (!_disposed) {
                 error =
@@ -246,7 +250,7 @@ class CaptureSession extends ChangeNotifier {
     });
   }
   static Future<CaptureSession> open(
-    ChapelPoint point,
+    GamePoint point,
     CampusFix fix, {
     String? requestId,
   }) async {
@@ -265,7 +269,7 @@ class CaptureSession extends ChangeNotifier {
     }
   }
 
-  final ChapelPoint point;
+  final GamePoint point;
   AttackState _state;
   final _clock = Stopwatch();
   Timer? _timer;
@@ -274,7 +278,9 @@ class CaptureSession extends ChangeNotifier {
   String get attackId => _state.id;
   int get correct => _state.correct;
   int get losses => _state.losses;
-  int get questionNumber => (_state.sequence + 1).clamp(1, 4);
+  AttackRules get rules => _state.rules;
+  int get questionNumber =>
+      (_state.sequence + 1).clamp(1, rules.questionsTotal);
   String get damagePercent =>
       healthText(_state.damageDealt / point.state.maxHp * 100);
   int get secondsRemaining =>
@@ -282,7 +288,7 @@ class CaptureSession extends ChangeNotifier {
                   _clock.elapsedMilliseconds) /
               1000)
           .ceil()
-          .clamp(0, 15);
+          .clamp(0, rules.questionSeconds);
   AttackPhase phase = AttackPhase.questionReady;
   int shotId = 0;
   bool closed = false, busy = false, retryNeeded = false;
@@ -306,7 +312,7 @@ class CaptureSession extends ChangeNotifier {
         canResume: next.active,
       ),
     );
-    point.apply(next.point);
+    point.applyDefinition(next.point);
     phase = keepFlight
         ? AttackPhase.flying
         : next.active
@@ -314,7 +320,7 @@ class CaptureSession extends ChangeNotifier {
         : AttackPhase.sessionEnded;
     if (!next.active && !captured) {
       message =
-          'Attempt complete. $correct/4 correct · $damagePercent% damage saved.';
+          'Attempt complete. $correct/${rules.questionsTotal} correct · $damagePercent% damage saved.';
     }
   }
 

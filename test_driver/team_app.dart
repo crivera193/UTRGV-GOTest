@@ -4,11 +4,12 @@ import 'package:campus_app/config/app_configuration.dart';
 import 'package:campus_app/main.dart';
 import 'package:campus_app/screens/main_screen.dart';
 import 'package:campus_app/teams/team_membership.dart';
-import 'package:campus_app/games/chapel_capture.dart';
+import 'package:campus_app/games/point_attack.dart';
 import 'package:campus_app/games/game_host.dart';
-import 'package:campus_app/games/chapel_card.dart';
+import 'package:campus_app/games/point_card.dart';
 import 'package:campus_app/games/live_attack_repository.dart';
-import 'package:campus_app/map/campus_geography.dart';
+import 'package:campus_app/games/point_catalog.dart';
+import 'package:campus_app/screens/map_screen.dart';
 import 'package:campus_app/map/campus_location.dart';
 import 'package:campus_app/widgets/mapbox_configuration_notice.dart';
 import 'package:flame/game.dart';
@@ -21,7 +22,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 const runId = String.fromEnvironment('TEAM_E2E_RUN');
 CaptureSession? attack;
-ChapelPoint? point;
+GamePoint? point;
 
 Future<Map<String, Object?>> inspect(SupabaseClient client) async {
   final user = client.auth.currentUser;
@@ -83,17 +84,26 @@ Future<void> main() async {
             throw StateError('Membership required');
           }
           point?.dispose();
-          point = ChapelPoint(
-            SupabaseAttackRepository(client),
+          final repo = SupabaseAttackRepository(client);
+          final spot = await repo.loadPoint(
+            data['spot_id'] as String? ?? 'qa-dynamic-play-20261022',
+          );
+          if (!spot.id.startsWith('qa-')) {
+            throw StateError(
+              'Only isolated QA points are allowed in this test entry',
+            );
+          }
+          point = GamePoint(
+            repo,
             playerTeam: TeamScope.of(main).team!,
-            spotId: 'qa-timed-native-v2-20261022',
+            spot: spot,
           );
           await point!.load();
           if (point!.error != null) throw StateError(point!.error!);
           showDialog<void>(
             context: main,
             useRootNavigator: false,
-            builder: (_) => ChapelCard(
+            builder: (_) => PointCard(
               point: point!,
               reason: () => null,
               distance: () => 0,
@@ -101,7 +111,7 @@ Future<void> main() async {
                 attack = await CaptureSession.open(
                   point!,
                   CampusFix(
-                    const CampusPoint(0, 0),
+                    point!.spot.point,
                     0,
                     DateTime.now().subtract(const Duration(milliseconds: 500)),
                   ),
@@ -110,7 +120,7 @@ Future<void> main() async {
                 await Navigator.of(main).push<GameExit>(
                   MaterialPageRoute(
                     builder: (_) => GameHost(
-                      gameId: 'chapel-football',
+                      gameId: point!.spot.gameId,
                       session: GameSessionContext(
                         spotId: point!.spotId,
                         startedAt: DateTime.now(),
@@ -127,6 +137,40 @@ Future<void> main() async {
             'hp': point!.state.hp,
             'can_resume': point!.canResume,
             'cooldown': point!.cooldownSeconds,
+          });
+        case 'catalog_map':
+          final main = ft.find.byType(MainScreen).evaluate().single;
+          Navigator.of(main).push(
+            MaterialPageRoute(
+              builder: (_) => Scaffold(
+                body: MapScreen(
+                  pointRepository: SupabasePointCatalogRepository(
+                    client,
+                    includeTest: true,
+                  ),
+                ),
+              ),
+            ),
+          );
+          return jsonEncode({'opened': 'live catalog map'});
+        case 'catalog':
+          final rows = await SupabasePointCatalogRepository(
+            client,
+            includeTest: true,
+          ).load();
+          return jsonEncode({
+            'points': rows.map((p) => p.toJson()).toList(),
+            'markers': ft.find.byType(PointBeacon).evaluate().map((e) {
+              final beacon = e.widget as PointBeacon;
+              final box = e.renderObject as RenderBox;
+              final origin = box.localToGlobal(Offset.zero);
+              return {
+                'key': beacon.key.toString(),
+                'name': beacon.name,
+                'x': origin.dx,
+                'y': origin.dy,
+              };
+            }).toList(),
           });
         case 'read_attack':
           return jsonEncode(
@@ -159,6 +203,9 @@ Future<void> main() async {
             'phase': attack?.phase.name,
             'losses': attack?.losses,
             'correct': attack?.correct,
+            'questions_total': attack?.rules.questionsTotal,
+            'question_seconds': attack?.rules.questionSeconds,
+            'max_damage_percent': attack?.rules.maxDamagePercent,
             'question_number': attack?.questionNumber,
             'seconds': attack?.secondsRemaining,
             'damage_percent': attack?.damagePercent,
