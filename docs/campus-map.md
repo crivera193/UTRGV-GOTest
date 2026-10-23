@@ -208,3 +208,9 @@ Normal preview restored in place as build 12035/versionCode 16035, signing uncha
 Analysis is clean and 13 focused camera/geography/GPS tests passed. Native QA at SWOT on emulator-5554, 1080×2400, exercised following, two zoom-out steps and southward panning. Visual review confirmed the whole building clears the controls at both zooms. An initial 150 m trial was insufficient at the wider zoom and was replaced before delivery. [Close view](evidence/camera-buffer/swot-close.png), [wide view](evidence/camera-buffer/swot-wide.png). Reproduce with `test_driver/camera_buffer_flow.dart` and the isolated QA driver session; its screenshots require visual inspection.
 
 Normal preview restored in place as build 12039/versionCode 16039. Installed bytes match the fresh APK SHA-256 `cebe67abe65b91ec05e1c3b36d2d33397564ce373bdd55da53f05a388a44a976`; signing and account data are preserved. Source stays on `codex/campus-map` for owner review. Existing unrelated camera/cowboy edits remain separate.
+
+## Map controls cleanup — October 23, 2026
+
+Removed the Game points and View campus buttons, their point-list bottom sheet, and the obsolete multi-button layout. Points still open their existing detail/attack card by tapping the map marker. Follow me remains centered at the bottom. Internal viewport fitting remains necessary for initial bounds and resize and is named accordingly; it has no separate overview control.
+
+Flutter analysis is clean and 20 focused campus-map, lifecycle and GPS tests passed. Normal emulator build 12048/versionCode 16048 was installed in place with unchanged signing. At 1080×2400, both buttons are absent; tapping Follow me centers the map and displays the cowboy and Following control. Installed APK bytes match the fresh artifact SHA-256 `a91766c0a291ddd80c021493a9e25f750cb389d088140c0e4eddd1e0357ff714`. Existing unrelated camera/cowboy work is preserved separately. No Supabase changes were needed.

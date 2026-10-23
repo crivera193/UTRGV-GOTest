@@ -1,7 +1,7 @@
 import 'campus_geography.dart';
 import 'dart:math' as math;
 
-/// The default is a close exploration view; View campus remains a separate fit.
+/// Default exploration framing and internal campus viewport fitting.
 abstract final class CampusPresentation {
   static const pitch = 55.0;
   static const overviewPitch = 55.0;

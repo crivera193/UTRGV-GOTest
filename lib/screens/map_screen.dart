@@ -341,7 +341,7 @@ class _MapScreenState extends State<MapScreen>
       }, pixelRatio: pixelRatio);
       if (!_hasFitted) {
         final saved = _savedView.value;
-        await _viewCampus();
+        await _fitCampusViewport();
         _cameraSession.explore();
         await _moveCamera(
           CameraOptions(
@@ -406,7 +406,7 @@ class _MapScreenState extends State<MapScreen>
     }
   }
 
-  Future<void> _viewCampus() async {
+  Future<void> _fitCampusViewport() async {
     final map = _map, c = _geography;
     if (map == null || c == null || _fitting || _gameOpen) return;
     _fitting = true;
@@ -525,10 +525,10 @@ class _MapScreenState extends State<MapScreen>
     }
   }
 
-  Future<void> _showOverview() async {
+  Future<void> _refitCampusViewport() async {
     if (_gameOpen) return;
     try {
-      await _viewCampus();
+      await _fitCampusViewport();
     } catch (_) {
       if (mounted) {
         setState(
@@ -992,52 +992,6 @@ class _MapScreenState extends State<MapScreen>
     }
   }
 
-  Future<void> _showPoints() async {
-    if (_pointCardOpen || _gameOpen) return;
-    final id = await showModalBottomSheet<String>(
-      context: context,
-      useRootNavigator: false,
-      showDragHandle: true,
-      builder: (_) => SafeArea(
-        child: ListenableBuilder(
-          listenable: _points,
-          builder: (context, _) => ListView(
-            shrinkWrap: true,
-            children: [
-              const ListTile(title: Text('Game points')),
-              if (_points.error != null)
-                ListTile(
-                  title: Text(_points.error!),
-                  trailing: TextButton(
-                    onPressed: _points.load,
-                    child: const Text('Retry'),
-                  ),
-                )
-              else if (!_points.loaded)
-                const ListTile(title: Text('Loading game points…'))
-              else if (_points.points.isEmpty)
-                const ListTile(
-                  title: Text('No game points are available yet.'),
-                ),
-              for (final point in _points.points)
-                ListTile(
-                  key: ValueKey('point-list-${point.id}'),
-                  title: Text(point.name),
-                  subtitle: Text(
-                    '${point.state.owner} · ${point.state.healthLabel} health',
-                  ),
-                  onTap: () => Navigator.of(context).pop(point.id),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-    if (!mounted || id == null) return;
-    final point = _points.find(id);
-    if (point != null) await _showPoint(point);
-  }
-
   Future<void> _attackPoint(GamePoint point) async {
     if (_gameOpen || _pointAttackReason(point) != null || point.friendly) {
       return;
@@ -1183,7 +1137,7 @@ class _MapScreenState extends State<MapScreen>
           _size = size;
           if (previous != null && _ready) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted) unawaited(_showOverview());
+              if (mounted) unawaited(_refitCampusViewport());
             });
           }
         }
@@ -1386,41 +1340,20 @@ class _MapScreenState extends State<MapScreen>
                   bottom: 44,
                   left: 12,
                   right: 12,
-                  child: Wrap(
-                    alignment: WrapAlignment.center,
-                    spacing: 10,
-                    runSpacing: 4,
-                    children: [
-                      FilledButton.tonalIcon(
-                        onPressed: _showPoints,
-                        icon: const Icon(Icons.flag_outlined),
-                        label: Text(
-                          _points.error != null
-                              ? 'Points unavailable'
-                              : !_points.loaded
-                              ? 'Loading points…'
-                              : 'Game points (${_points.points.length})',
-                        ),
+                  child: Center(
+                    child: FilledButton.icon(
+                      onPressed: _requesting ? null : _followMe,
+                      icon: Icon(
+                        _following ? Icons.gps_fixed : Icons.my_location,
                       ),
-                      FilledButton.tonalIcon(
-                        onPressed: () => unawaited(_showOverview()),
-                        icon: const Icon(Icons.school_outlined),
-                        label: const Text('View campus'),
+                      label: Text(
+                        _requesting
+                            ? 'Finding GPS…'
+                            : _following
+                            ? 'Following'
+                            : 'Follow me',
                       ),
-                      FilledButton.icon(
-                        onPressed: _requesting ? null : _followMe,
-                        icon: Icon(
-                          _following ? Icons.gps_fixed : Icons.my_location,
-                        ),
-                        label: Text(
-                          _requesting
-                              ? 'Finding GPS…'
-                              : _following
-                              ? 'Following'
-                              : 'Follow me',
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
               ],
