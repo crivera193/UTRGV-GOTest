@@ -247,7 +247,7 @@ class _GameHostState extends State<GameHost>
                       ),
                       Text(
                         attack.phase == AttackPhase.sessionEnded
-                            ? '${attack.correct}/${attack.rules.questionsTotal} correct · ${attack.damagePercent}% damage'
+                            ? '${attack.correct}/${attack.rules.questionsTotal} correct · ${attack.damagePercent}% damage · ${attack.xpEarned} XP earned'
                             : 'Question ${attack.questionNumber}/${attack.rules.questionsTotal} · ${attack.secondsRemaining}s',
                         key: const ValueKey('attack-timer'),
                       ),

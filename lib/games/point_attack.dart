@@ -52,6 +52,7 @@ class AttackState {
           (j['miss_count'] as int) +
           (j['timeout_count'] as int),
       damageDealt = (j['damage_dealt'] as num).toDouble(),
+      xpEarned = (j['xp_earned'] as num?)?.toInt() ?? 0,
       serverNow = DateTime.parse(j['server_now'] as String),
       cooldownUntil = DateTime.parse(j['cooldown_until'] as String),
       dueAt = DateTime.parse((j['question'] as Map)['due_at'] as String),
@@ -66,6 +67,7 @@ class AttackState {
   final int sequence, correct, losses;
   final AttackRules rules;
   final double damageDealt;
+  final int xpEarned;
   final DateTime serverNow, cooldownUntil, dueAt;
   final String? lastOutcome;
   final LiveGamePoint point;
@@ -278,6 +280,7 @@ class CaptureSession extends ChangeNotifier {
   String get attackId => _state.id;
   int get correct => _state.correct;
   int get losses => _state.losses;
+  int get xpEarned => _state.xpEarned;
   AttackRules get rules => _state.rules;
   int get questionNumber =>
       (_state.sequence + 1).clamp(1, rules.questionsTotal);

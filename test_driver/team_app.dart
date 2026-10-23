@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:campus_app/config/app_configuration.dart';
 import 'package:campus_app/main.dart';
 import 'package:campus_app/screens/main_screen.dart';
+import 'package:campus_app/trainer/trainer_profile.dart';
 import 'package:campus_app/teams/team_membership.dart';
 import 'package:campus_app/games/point_attack.dart';
 import 'package:campus_app/games/game_host.dart';
@@ -56,6 +57,18 @@ Future<void> main() async {
       final data = jsonDecode(message!) as Map<String, dynamic>;
       final client = Supabase.instance.client;
       switch (data['op']) {
+        case 'trainer':
+          final trainer = await SupabaseTrainerRepository(client).load();
+          return jsonEncode({
+            'profile': trainer.profile,
+            'xp': trainer.xp,
+            'level': trainer.level,
+            'rank': trainer.rank,
+            'earned': trainer.achievements
+                .where((a) => a['earned_at'] != null)
+                .map((a) => a['id'])
+                .toList(),
+          });
         case 'inspect':
           final result = await inspect(client);
           final main = ft.find.byType(MainScreen).evaluate();

@@ -4,12 +4,13 @@ The former social-events product has been removed in place. The app is named UTR
 
 ## Current scope
 
+- Trainer profiles now support a unique username, trainer name, private photo and bio editing. Live server-owned XP, levels, ranks, badges and achievements are configurable in Supabase: [trainer progression and verification](docs/trainer-progression.md).
 - Permanent team onboarding now gates authenticated teamless accounts before the map. The three game teams are Health and Science (blue), Math and Engineering (red), and Art and Stuff (yellow). Implementation, live migration/security checks and visual-review limits: [team onboarding](docs/team-onboarding.md).
 - Email/password accounts restricted to .edu addresses, without email verification (all .edu domains, not only UTRGV).
 - Clean account screens and a custom campus-only Mapbox map with opt-in GPS.
 - No events, factions, friends, event moderation, social notifications, Bon/Sparky branding or demo XP.
 - The existing cowboy sprite atlases are registered and connected to the filtered campus GPS position. The cowboy appears only with a valid on-campus fix and hides off campus, on stale/unavailable GPS and while the app is inactive. Location remains opt-in through Follow me.
-- The cowboy uses a rendered sprite overlay with GPS-driven walking/standing. The separate Flame host now includes the local chapel football-quiz capture prototype. Live animated 3D rendering is not implemented. Native map alignment and real campus walking remain to be reviewed on-device. See [cowboy source, runtime assets and rendering limits](docs/cowboy-player.md) and [chapel capture, debug entry/reset and review limits](docs/flame-games.md).
+- The cowboy uses a rendered sprite overlay with GPS-driven walking/standing. The separate Flame host includes live Supabase free-kick attacks with editable points/rules and server-owned trainer XP. Live animated 3D rendering is not implemented. Native map alignment and real campus walking remain to be reviewed on-device. See [cowboy source, runtime assets and rendering limits](docs/cowboy-player.md) and [live point gameplay and verification](docs/flame-games.md).
 
 ## New Supabase project only
 
