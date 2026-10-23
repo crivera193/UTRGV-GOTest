@@ -77,11 +77,11 @@ void main() {
       final clamped = geography.clampCameraCenter(p);
       expect(
         clamped.longitude,
-        inInclusiveRange(geography.west, geography.east),
+        inInclusiveRange(geography.cameraWest, geography.cameraEast),
       );
       expect(
         clamped.latitude,
-        inInclusiveRange(geography.south, geography.north),
+        inInclusiveRange(geography.cameraSouth, geography.cameraNorth),
       );
     }
   });

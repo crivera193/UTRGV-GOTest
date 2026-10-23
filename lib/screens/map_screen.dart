@@ -238,8 +238,8 @@ class _MapScreenState extends State<MapScreen>
     await map.setBounds(
       CameraBoundsOptions(
         bounds: CoordinateBounds(
-          southwest: _point(CampusPoint(c.west, c.south)),
-          northeast: _point(CampusPoint(c.east, c.north)),
+          southwest: _point(CampusPoint(c.cameraWest, c.cameraSouth)),
+          northeast: _point(CampusPoint(c.cameraEast, c.cameraNorth)),
           infiniteBounds: false,
         ),
         minZoom: _minZoom,

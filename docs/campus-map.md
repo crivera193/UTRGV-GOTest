@@ -199,3 +199,12 @@ Each existing decorative landmark now uses the cats' shared raw-GPS arrival poli
 Analysis is clean; five focused proximity/cat tests passed, including independent arrival, departure, stale/poor GPS and off-campus rejection. Android synthetic GPS checks on emulator-5554 (1080×2400) verified both hidden far away, Dragon near CS only, Flower near MED only, and both hidden again after leaving. Reproduce with `test_driver/campus_creatures_flow.dart` against the separate QA driver session. [Dragon](evidence/campus-creatures/dragon-near.png), [flower](evidence/campus-creatures/flower-near.png), [far away](evidence/campus-creatures/far.png).
 
 Normal preview restored in place as build 12035/versionCode 16035, signing unchanged. The pulled installed APK matches fresh SHA-256 `b8759c01c7827c6bc5fc837738c849431ff36457cc8f38f829bf69bfea176fa6`. Real outdoor GPS and owner visual acceptance remain unverified. Shared uncommitted camera/cowboy work is preserved separately; source changes stay on `codex/campus-creatures` for review.
+
+
+## Southern camera breathing room — October 23, 2026
+
+`boundary.geojson` now has editable `camera_buffer_meters` properties (west/east/south/north; absent directions mean zero). South is 450 m, tuned on the actual preview to keep SWOT clear of the bottom controls at close and wider exploration zooms. Other directions remain unchanged. Both native Mapbox bounds and programmatic camera clamping use these limits. This is camera-only space: campus rendering, polygon membership, GPS eligibility, game points and Supabase data are unchanged. Invalid negative/non-finite settings fail loading explicitly.
+
+Analysis is clean and 13 focused camera/geography/GPS tests passed. Native QA at SWOT on emulator-5554, 1080×2400, exercised following, two zoom-out steps and southward panning. Visual review confirmed the whole building clears the controls at both zooms. An initial 150 m trial was insufficient at the wider zoom and was replaced before delivery. [Close view](evidence/camera-buffer/swot-close.png), [wide view](evidence/camera-buffer/swot-wide.png). Reproduce with `test_driver/camera_buffer_flow.dart` and the isolated QA driver session; its screenshots require visual inspection.
+
+Normal preview restored in place as build 12039/versionCode 16039. Installed bytes match the fresh APK SHA-256 `cebe67abe65b91ec05e1c3b36d2d33397564ce373bdd55da53f05a388a44a976`; signing and account data are preserved. Source stays on `codex/campus-map` for owner review. Existing unrelated camera/cowboy edits remain separate.

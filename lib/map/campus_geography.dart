@@ -13,6 +13,15 @@ class CampusGeography {
   CampusGeography.fromGeoJson(String text) {
     final features =
         (jsonDecode(text) as Map<String, dynamic>)['features'] as List;
+    final settings =
+        (features.first['properties'] as Map?)?['camera_buffer_meters'] as Map?;
+    for (final side in ['west', 'east', 'south', 'north']) {
+      final value = settings?[side] ?? 0;
+      if (value is! num || !value.isFinite || value < 0) {
+        throw FormatException('Invalid camera buffer: $side');
+      }
+      _cameraBuffer[side] = value.toDouble();
+    }
     for (final feature in features) {
       final geometry = feature['geometry'];
       final polygons = geometry['type'] == 'Polygon'
@@ -35,7 +44,15 @@ class CampusGeography {
     north = points.map((p) => p.latitude).reduce(math.max);
   }
 
+  final Map<String, double> _cameraBuffer = {};
   final List<List<List<CampusPoint>>> rings = [];
+  // Camera-only breathing room; the GPS/playable polygon stays unchanged.
+  double get cameraWest => west - _cameraBuffer['west']! / _longitudeMeters;
+  double get cameraEast => east + _cameraBuffer['east']! / _longitudeMeters;
+  double get cameraSouth => south - _cameraBuffer['south']! / 111320;
+  double get cameraNorth => north + _cameraBuffer['north']! / 111320;
+  double get _longitudeMeters =>
+      111320 * math.cos(center.latitude * math.pi / 180);
   late final double west, east, south, north;
   CampusPoint get center => CampusPoint((west + east) / 2, (south + north) / 2);
   Iterable<CampusPoint> get outerPoints => rings.expand((p) => p.first);
@@ -88,8 +105,8 @@ class CampusGeography {
   }
 
   CampusPoint clampCameraCenter(CampusPoint point) => CampusPoint(
-    point.longitude.clamp(west, east),
-    point.latitude.clamp(south, north),
+    point.longitude.clamp(cameraWest, cameraEast),
+    point.latitude.clamp(cameraSouth, cameraNorth),
   );
 
   static double distance(CampusPoint a, CampusPoint b) {
