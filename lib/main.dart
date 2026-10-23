@@ -34,6 +34,7 @@ class CampusApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) => MaterialApp(
     title: 'UTRGV-GO',
+    restorationScopeId: 'utrgv-go',
     debugShowCheckedModeBanner: false,
     theme: ThemeData(
       useMaterial3: true,

@@ -4,6 +4,7 @@ import 'dart:math' as math;
 /// The default is a close exploration view; View campus remains a separate fit.
 abstract final class CampusPresentation {
   static const pitch = 55.0;
+  static const overviewPitch = 55.0;
   static const explorationZoom = 16.8;
   static const followZoom = 17.5;
   static const academicCore = CampusPoint(-98.1740, 26.3067);

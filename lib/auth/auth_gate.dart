@@ -57,11 +57,14 @@ class AuthGate extends StatelessWidget {
             ),
           );
         }
-        return TeamGate(
-          key: ValueKey(user.id),
-          repository: SupabaseTeamRepository(client, user.id),
-          onSignOut: client.auth.signOut,
-          child: const MainScreen(),
+        return RestorationScope(
+          restorationId: 'account-${user.id}',
+          child: TeamGate(
+            key: ValueKey(user.id),
+            repository: SupabaseTeamRepository(client, user.id),
+            onSignOut: client.auth.signOut,
+            child: const MainScreen(),
+          ),
         );
       },
     );

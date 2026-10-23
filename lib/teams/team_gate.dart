@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'team_membership.dart';
 import 'team_selection_screen.dart';
 import '../games/game_host.dart';
@@ -21,6 +23,7 @@ class TeamGate extends StatefulWidget {
 
 class _TeamGateState extends State<TeamGate> {
   late final TeamMembership membership;
+  final _navigator = GlobalKey<NavigatorState>();
   @override
   void initState() {
     super.initState();
@@ -36,71 +39,88 @@ class _TeamGateState extends State<TeamGate> {
   @override
   Widget build(BuildContext context) => TeamScope(
     membership: membership,
-    child: Navigator(
-      observers: [gameRouteObserver],
-      onGenerateRoute: (_) => MaterialPageRoute<void>(
-        builder: (context) => ListenableBuilder(
-          listenable: membership,
-          builder: (context, _) {
-            if (membership.phase == TeamPhase.assigned) return widget.child;
-            if (membership.phase == TeamPhase.missing ||
-                membership.phase == TeamPhase.saving) {
-              return TeamSelectionScreen(
-                membership: membership,
-                onSignOut: widget.onSignOut,
-              );
-            }
-            return PopScope(
-              canPop: false,
-              child: Scaffold(
-                body: SafeArea(
-                  child: Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (membership.phase == TeamPhase.loading) ...[
-                            const CircularProgressIndicator(),
-                            const SizedBox(height: 16),
-                            const Text('Checking your team…'),
-                          ] else ...[
-                            Text(
-                              membership.message!,
-                              textAlign: TextAlign.center,
-                            ),
-                            const SizedBox(height: 16),
-                            FilledButton(
-                              onPressed: membership.load,
-                              child: const Text('Retry team check'),
+    child: PopScope<void>(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) async {
+        if (didPop) return;
+        final navigator = _navigator.currentState;
+        if (navigator != null && navigator.canPop()) {
+          await navigator.maybePop();
+        } else if (defaultTargetPlatform == TargetPlatform.android) {
+          // Only after the account's routes decline Back, delegate root exit
+          // through Flutter's native hook, which backgrounds this Android task.
+          await SystemNavigator.pop();
+        }
+      },
+      child: Navigator(
+        key: _navigator,
+        restorationScopeId: 'team-navigation',
+        observers: [gameRouteObserver],
+        onGenerateRoute: (settings) => MaterialPageRoute<void>(
+          settings: settings,
+          builder: (context) => ListenableBuilder(
+            listenable: membership,
+            builder: (context, _) {
+              if (membership.phase == TeamPhase.assigned) return widget.child;
+              if (membership.phase == TeamPhase.missing ||
+                  membership.phase == TeamPhase.saving) {
+                return TeamSelectionScreen(
+                  membership: membership,
+                  onSignOut: widget.onSignOut,
+                );
+              }
+              return PopScope(
+                canPop: false,
+                child: Scaffold(
+                  body: SafeArea(
+                    child: Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (membership.phase == TeamPhase.loading) ...[
+                              const CircularProgressIndicator(),
+                              const SizedBox(height: 16),
+                              const Text('Checking your team…'),
+                            ] else ...[
+                              Text(
+                                membership.message!,
+                                textAlign: TextAlign.center,
+                              ),
+                              const SizedBox(height: 16),
+                              FilledButton(
+                                onPressed: membership.load,
+                                child: const Text('Retry team check'),
+                              ),
+                            ],
+                            TextButton(
+                              onPressed: () async {
+                                try {
+                                  await widget.onSignOut();
+                                } catch (_) {
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          'Unable to sign out. Try again.',
+                                        ),
+                                      ),
+                                    );
+                                  }
+                                }
+                              },
+                              child: const Text('Sign out'),
                             ),
                           ],
-                          TextButton(
-                            onPressed: () async {
-                              try {
-                                await widget.onSignOut();
-                              } catch (_) {
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text(
-                                        'Unable to sign out. Try again.',
-                                      ),
-                                    ),
-                                  );
-                                }
-                              }
-                            },
-                            child: const Text('Sign out'),
-                          ),
-                        ],
+                        ),
                       ),
                     ),
                   ),
                 ),
-              ),
-            );
-          },
+              );
+            },
+          ),
         ),
       ),
     ),

@@ -57,6 +57,14 @@ Future<void> main() async {
       final data = jsonDecode(message!) as Map<String, dynamic>;
       final client = Supabase.instance.client;
       switch (data['op']) {
+        case 'map_view':
+          final element =
+              ft.find.byType(MapScreen).evaluate().single as StatefulElement;
+          final dynamic state = element.state;
+          return jsonEncode({
+            'view': state.bucket?.read<Object?>('view'),
+            'instance': identityHashCode(state),
+          });
         case 'trainer':
           final trainer = await SupabaseTrainerRepository(client).load();
           return jsonEncode({
