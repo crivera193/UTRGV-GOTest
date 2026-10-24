@@ -127,10 +127,6 @@ class _MapScreenState extends State<MapScreen>
   }
 
   final _proximity = SpotProximity(const []);
-  final _kittyProximity = KittyIslandProximity();
-  final _creatureProximity = CampusCreatureProximity(
-    CampusCreatureLandmark.all,
-  );
   final _kittyPlacement = ValueNotifier<List<Offset>?>(null);
   late final LatestProjection<List<Offset>> _kittyProjector;
   final _creaturePlacement = ValueNotifier<List<CampusCreaturePlacement>?>(
@@ -157,11 +153,7 @@ class _MapScreenState extends State<MapScreen>
     _kittyProjector = LatestProjection<List<Offset>>(
       read: () async {
         final map = _map;
-        if (map == null ||
-            !_styleLoaded ||
-            !_foreground ||
-            !_kittyProximity.visible ||
-            _gameOpen) {
+        if (map == null || !_styleLoaded || !_foreground || _gameOpen) {
           return null;
         }
         final positions = <Offset>[];
@@ -361,7 +353,7 @@ class _MapScreenState extends State<MapScreen>
           _ready = true;
           _error = null;
         });
-        _syncBuildingCreatures();
+        _syncKittyCats();
       }
     } catch (_) {
       if (mounted) {
@@ -482,7 +474,6 @@ class _MapScreenState extends State<MapScreen>
 
   void _cameraChanged(CameraChangedEventData event) {
     _cameraState = event.cameraState;
-    _syncBuildingCreatures();
     _syncKittyCats();
     unawaited(_pointProjector.request(invalidate: true));
     if (_hasFitted && !_fitting) {
@@ -593,17 +584,6 @@ class _MapScreenState extends State<MapScreen>
                 p.accuracy,
                 p.timestamp,
               );
-              _creatureProximity.accept(
-                gameFix,
-                onCampus: _location!.state == CampusGpsState.onCampus,
-                now: DateTime.now(),
-              );
-              _kittyProximity.accept(
-                gameFix,
-                onCampus: _location!.state == CampusGpsState.onCampus,
-                now: DateTime.now(),
-              );
-              _syncKittyCats();
               _proximity.accept(
                 gameFix,
                 onCampus: _location!.state == CampusGpsState.onCampus,
@@ -653,8 +633,7 @@ class _MapScreenState extends State<MapScreen>
         final previousState = _location!.state;
         final wasWalking = _cowboyMotion.walking;
         _location!.expire(DateTime.now());
-        _kittyProximity.refresh(DateTime.now());
-        _creatureProximity.refresh(DateTime.now());
+
         _syncKittyCats();
         final previousSpot = _proximity.state;
         _proximity.refresh(DateTime.now());
@@ -685,11 +664,8 @@ class _MapScreenState extends State<MapScreen>
     if (_disposed) return;
     _locationGeneration++;
     _lastFollowCenter = null;
-    _kittyProximity.unavailable();
-    _creatureProximity.unavailable();
-    _syncBuildingCreatures();
-    _kittyProjector.cancel();
-    _kittyPlacement.value = null;
+
+    _syncKittyCats();
     _proximity.unavailable();
     _cowboyMotion.stop();
     _location?.expire(DateTime.now());
@@ -712,10 +688,6 @@ class _MapScreenState extends State<MapScreen>
 
   Future<void> _refreshLocation() async {
     if (!mounted) return;
-    if (_location?.state != CampusGpsState.onCampus) {
-      _kittyProximity.unavailable();
-      _creatureProximity.unavailable();
-    }
     _syncKittyCats();
     if (_location?.state != CampusGpsState.onCampus &&
         _location?.state != CampusGpsState.outside &&
@@ -904,7 +876,7 @@ class _MapScreenState extends State<MapScreen>
     final change = _lifecycle.accept(state);
     if (change == MapLifecycleChange.suspend) {
       _rememberView();
-      _syncBuildingCreatures();
+      _syncKittyCats();
       _projector.cancel();
       _cowboyMotion.stop();
       _proximity.unavailable();
@@ -914,7 +886,7 @@ class _MapScreenState extends State<MapScreen>
       _location?.expire(DateTime.now());
       if (_location?.marker == null) _clearTravel();
       setState(() {});
-      _syncBuildingCreatures();
+      _syncKittyCats();
       if (_pointsInitialized) unawaited(_points.load());
       if (_openPoint case final GamePoint open) unawaited(open.load());
       if (_locationEnabled && _ready) unawaited(_resumeGps());
@@ -1063,11 +1035,7 @@ class _MapScreenState extends State<MapScreen>
 
   void _syncKittyCats() {
     _syncBuildingCreatures();
-    if (!_foreground ||
-        !_kittyProximity.visible ||
-        _gameOpen ||
-        !_ready ||
-        _error != null) {
+    if (!_foreground || _gameOpen || !_ready || _error != null) {
       _kittyProjector.cancel();
       _kittyPlacement.value = null;
       return;
@@ -1076,11 +1044,7 @@ class _MapScreenState extends State<MapScreen>
   }
 
   void _syncBuildingCreatures() {
-    if (!_foreground ||
-        _gameOpen ||
-        !_ready ||
-        _error != null ||
-        !_creatureProximity.anyVisible) {
+    if (!_foreground || _gameOpen || !_ready || _error != null) {
       _creatureProjector.cancel();
       _creaturePlacement.value = null;
       return;
@@ -1098,17 +1062,13 @@ class _MapScreenState extends State<MapScreen>
       return null;
     }
     final camera = _cameraState ?? await map.getCameraState();
-    if (camera.zoom < 16) return const [];
-    final nearby = CampusCreatureLandmark.all
-        .where((landmark) => _creatureProximity.visible(landmark.id))
-        .toList();
+    const landmarks = CampusCreatureLandmark.all;
     final pixels = await map.pixelsForCoordinates([
-      for (final landmark in nearby) _point(landmark.point),
+      for (final landmark in landmarks) _point(landmark.point),
     ]);
     final placements = <CampusCreaturePlacement>[];
-    for (var i = 0; i < pixels.length && i < nearby.length; i++) {
-      final pixel = pixels[i], landmark = nearby[i];
-      if (!_creatureProximity.visible(landmark.id)) continue;
+    for (var i = 0; i < pixels.length && i < landmarks.length; i++) {
+      final pixel = pixels[i], landmark = landmarks[i];
       if (pixel == null || !pixel.x.isFinite || !pixel.y.isFinite) continue;
       final position = Offset(
         pixel.x,

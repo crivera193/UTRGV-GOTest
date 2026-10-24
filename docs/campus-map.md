@@ -192,7 +192,7 @@ Shared camera/cowboy repairs remain separate uncommitted work. Feature branch:
 `codex/building-labels`; owner visual acceptance/main integration remain pending.
 
 
-## Nearby dragon and flower — October 23, 2026
+## Nearby dragon and flower — October 23, 2026 (superseded below)
 
 Each existing decorative landmark now uses the cats' shared raw-GPS arrival policy independently: enter within 30 m for 2 seconds, remain visible until beyond 45 m, require accuracy at most 20 m and a fix no older than 10 seconds. Stale/disabled GPS, leaving campus, pausing and opening a game hide decorations. Camera panning alone cannot reveal them. Existing artwork, landmark coordinates and zoom visibility remain unchanged. The reusable gate accepts the landmark collection without per-landmark behavior. The pre-existing bundled decoration catalog remains source-defined; this scoped change does not migrate it to the live game-point catalog or alter Supabase combat.
 
@@ -214,3 +214,9 @@ Normal preview restored in place as build 12039/versionCode 16039. Installed byt
 Removed the Game points and View campus buttons, their point-list bottom sheet, and the obsolete multi-button layout. Points still open their existing detail/attack card by tapping the map marker. Follow me remains centered at the bottom. Internal viewport fitting remains necessary for initial bounds and resize and is named accordingly; it has no separate overview control.
 
 Flutter analysis is clean and 20 focused campus-map, lifecycle and GPS tests passed. Normal emulator build 12048/versionCode 16048 was installed in place with unchanged signing. At 1080×2400, both buttons are absent; tapping Follow me centers the map and displays the cowboy and Following control. Installed APK bytes match the fresh artifact SHA-256 `a91766c0a291ddd80c021493a9e25f750cb389d088140c0e4eddd1e0357ff714`. Existing unrelated camera/cowboy work is preserved separately. No Supabase changes were needed.
+
+## Always-visible decorations — October 23, 2026
+
+Owner reversed the proximity behavior: dragon, flower and cats now render whenever their locations are in the map viewport, including before enabling GPS and at overview zoom. Removed both decoration proximity classes, their distance/accuracy/dwell/expiry settings, GPS subscriptions to those gates and obsolete tests. Startup, camera changes and foreground recovery project decorations independently of GPS; background/game screens still stop/hide map animation. Attack-point proximity rules are unchanged. Existing artwork and source-defined landmark coordinates are preserved; no live point or Supabase configuration changed.
+
+Analysis is clean; 17 focused cat/creature animation, GPS-resume and attack-proximity tests passed. Normal emulator build 12050/versionCode 16050 installed in place with unchanged signing. A native 1080×2400 map check showed all three decorations while location was not enabled, after zooming out. [Native map evidence](evidence/campus-creatures/always-visible.png). The old native driver flow now checks browsing while GPS stays distant; it was updated and analyzed, but not run in this pass. Installed APK SHA-256 matches the fresh artifact: `4586e5134c5b5365cc7235707d89d028e568d48fbc0da26bfcd5a793fb8b271e`. Phone installation was not repeated for this change. Unrelated camera/cowboy work remains separate.

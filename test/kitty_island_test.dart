@@ -1,9 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
-import 'package:campus_app/map/campus_geography.dart';
-import 'package:campus_app/map/campus_location.dart';
-import 'package:campus_app/map/kitty_island.dart';
 import 'package:campus_app/widgets/kitty_island_cats.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -11,86 +8,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lottie/lottie.dart';
 
 void main() {
-  final start = DateTime.utc(2026, 10, 21);
-  CampusFix fix(int seconds, {double meters = 0, double accuracy = 5}) =>
-      CampusFix(
-        CampusPoint(
-          KittyIsland.center.longitude,
-          KittyIsland.center.latitude + meters / 111195,
-        ),
-        accuracy,
-        start.add(Duration(seconds: seconds)),
-      );
-
-  test('arrival dwell, exit hysteresis and re-entry use fresh raw fixes', () {
-    final policy = KittyIslandProximity();
-    void update(int t, double meters) => policy.accept(
-      fix(t, meters: meters),
-      onCampus: true,
-      now: start.add(Duration(seconds: t)),
-    );
-    update(0, 35);
-    update(1, 29);
-    expect(policy.visible, isFalse);
-    update(3, 28);
-    expect(policy.visible, isTrue);
-    update(4, 40);
-    expect(policy.visible, isTrue);
-    update(5, 46);
-    expect(policy.visible, isFalse);
-    update(6, 40);
-    expect(policy.visible, isFalse);
-    update(7, 20);
-    update(9, 20);
-    expect(policy.visible, isTrue);
-  });
-
-  test(
-    'duplicates, poor accuracy, stale GPS and off-campus cannot reveal cats',
-    () {
-      final policy = KittyIslandProximity();
-      policy.accept(fix(0), onCampus: true, now: start);
-      policy.accept(
-        fix(0),
-        onCampus: true,
-        now: start.add(const Duration(seconds: 3)),
-      );
-      expect(policy.visible, isFalse);
-      policy.accept(
-        fix(3),
-        onCampus: true,
-        now: start.add(const Duration(seconds: 3)),
-      );
-      expect(policy.visible, isTrue);
-      policy.refresh(start.add(const Duration(seconds: 14)));
-      expect(policy.visible, isFalse);
-      policy.accept(
-        fix(14, accuracy: 30),
-        onCampus: true,
-        now: start.add(const Duration(seconds: 14)),
-      );
-      policy.accept(
-        fix(17),
-        onCampus: false,
-        now: start.add(const Duration(seconds: 17)),
-      );
-      expect(policy.visible, isFalse);
-      policy.accept(
-        fix(18),
-        onCampus: true,
-        now: start.add(const Duration(seconds: 18)),
-      );
-      policy.accept(
-        fix(20),
-        onCampus: true,
-        now: start.add(const Duration(seconds: 20)),
-      );
-      expect(policy.visible, isTrue);
-      policy.unavailable();
-      expect(policy.visible, isFalse);
-    },
-  );
-
   testWidgets(
     'all actual Lottie files decode and animate without blocking input',
     (tester) async {

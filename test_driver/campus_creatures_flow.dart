@@ -44,28 +44,18 @@ Future<void> main() async {
       await gps(-98.1735, 26.3078);
       await d.tap(find.text('Follow me'));
       await gps(-98.1735, 26.3078);
-      await d.waitForAbsent(find.byValueKey('computer-science-dragon'));
-      await d.waitForAbsent(find.byValueKey('school-of-medicine-floral'));
-      await shot('creatures-far');
-      await gps(-98.1747739, 26.3062088);
-      await d.waitFor(
-        find.byValueKey('computer-science-dragon'),
-        timeout: const Duration(seconds: 15),
-      );
-      await d.waitForAbsent(find.byValueKey('school-of-medicine-floral'));
-      await shot('dragon-near');
-      await gps(-98.17508, 26.30995);
-      await d.waitFor(
-        find.byValueKey('school-of-medicine-floral'),
-        timeout: const Duration(seconds: 15),
-      );
-      await d.waitForAbsent(find.byValueKey('computer-science-dragon'));
-      await shot('flower-near');
-      await gps(-98.1735, 26.3078);
-      await d.waitForAbsent(find.byValueKey('computer-science-dragon'));
-      await d.waitForAbsent(find.byValueKey('school-of-medicine-floral'));
+      // Browse the campus while GPS remains at the same distant point.
+      await d.setSemantics(true);
+      for (var i = 0; i < 7; i++) {
+        await d.tap(find.bySemanticsLabel('Zoom out'));
+        await Future<void>.delayed(const Duration(milliseconds: 400));
+      }
+      await d.waitFor(find.byValueKey('computer-science-dragon'));
+      await d.waitFor(find.byValueKey('school-of-medicine-floral'));
+      await d.waitFor(find.byType('KittyIslandCats'));
+      await shot('always-visible');
       stdout.writeln(
-        'PASS: far hides both; nearby dragon/flower reveal independently; leaving hides both.',
+        'PASS: dragon, flower and cats render while browsing away from the player.',
       );
     });
   } finally {
