@@ -157,6 +157,58 @@ The baseline capture diagnoses the old result; it is not a revised-style capture
 New player-follow, closer zoom and overview native captures remain unavailable
 until manual installation/review is authorized. A build is not visual acceptance.
 
+## Camera refinement — October 20, 2026
+
+This supersedes the exploration framing in the reference presentation above.
+The viewport scale changes from 220 m to 110 m: +1.0 zoom at the same width
+(16.823 -> 17.823 on the 411.43-logical-pixel emulator). The default clamp changes
+from 16–17.5 to 17–18.5. Exploration pitch changes 55 -> 45 degrees. Top padding
+changes 35% -> 40% of map height; bottom remains 100 logical pixels. The focus
+lands about 64% down the map on the reviewed portrait viewport, below center.
+Short landscape keeps its existing 80/64 padding.
+
+View campus retains the full-boundary fit at 55 degrees, with a separate overview
+pitch. Native pitch bounds allow these two programmatic settings; pitch gestures
+remain disabled. The full fit only sets the minimum zoom. It does not cap close
+exploration. Startup exits overview before applying the close camera. Follow me
+uses the retained exploration zoom; ordinary GPS updates still send center only.
+Pinch and +/- and the campus center/zoom limits are unchanged.
+
+Compared +0.5 and +1.0 zoom candidates with lower pitch through the installed debug
+app's VM service and native camera API; no taps, coordinate overrides, installation,
+video or deployment. The selected +1.0 framing makes footprints and walkways more
+prominent. Roof/wall light and vertical gradient remain unchanged. Height multiplier
+remains 1.0 (no added exaggeration); the underlying 9 m/default and floor-count
+estimates above remain estimates. No asset, footprint, color, path, cowboy, GPS
+motion or Flame changes.
+
+Native 1080x2400 before/after captures at the same stationary emulator location
+are in ignored tmp/camera-refinement/before.png and after.png. Earlier preliminary
+captures occurred while an existing emulator location stream was still moving;
+those are not the same-location comparison. The final pair was captured after
+it stopped. These captures apply the exact chosen camera parameters to the running
+native renderer; source compilation is checked separately. No APK was installed by this camera pass. The GPS chat separately installed its owner-approved version 8003; the final pair was recaptured afterward, confirming zoom, pitch and identical stationary location for each capture.
+Owner visual review remains pending.
+
+Viewport resize now recomputes the fit-derived minimum while retaining exploration
+center, zoom and following state. It only shows the wide fit if already in overview
+or View campus was explicitly requested. This fixes the previous automatic reset
+on a map-size change. Concurrent player/GPS edits in this checkout are preserved;
+they are not camera-pass changes.
+
+Validation: Flutter analysis clean, all 11 existing map tests pass, Android x86_64
+debug build succeeds, and git diff --check passes. The source remains pending
+owner visual review; no camera-pass upload, installation or deployment performed.
+
+October 20 follow-up: owner changed the standing delivery instruction to always
+build/install app updates into the open preview. Fresh version 8004 was built from
+the current shared source (camera refinement plus current GPS/cowboy repair),
+signature matched against the installed 8003 APK, installed with adb install -r
+and launched on emulator-5554. Installed version 8004 and the signed-in close campus
+map were verified. No data clear/uninstall occurred. Capture: ignored
+tmp/app-update/version-8004.png. Location starts disabled after app launch; Follow me
+activates tracking. This installation supersedes the earlier no-install task limit.
+
 ## Tappable building labels — October 21, 2026
 
 Owner selected short labels plus tap-to-name. `assets/campus/building-labels.json`

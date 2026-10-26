@@ -78,7 +78,10 @@ CowboyMotion measures cadence and separates accumulated evidence from walking
 expiry. Two coherent segments above max(1.8 m, min(3.5 m, accuracy × 0.15)) start
 walking; genuinely reported reliable provider speed can corroborate the first
 segment. Missing speed/accuracy is never interpreted as measured zero. Travel
-must be 0.45–3.5 m/s. Stationary samples settle to idle; missing samples stop
+must be 0.45–12 m/s; the upper limit rejects jumps, not faster route playback.
+Displacement determines speed and course; provider velocity only corroborates
+the first segment when it agrees with displacement. Stationary samples settle
+to idle; missing samples stop
 walking after a cadence-dependent 3–8 seconds. Playback is bounded to 0.8–1.35×
 the source speed. Invalid, stale, duplicate or implausible fixes do not walk.
 

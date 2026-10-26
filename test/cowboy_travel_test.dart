@@ -9,6 +9,41 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   final epoch = DateTime.utc(2026, 1, 1);
   test(
+    'SIMULATED replay of observed 4.3 m/s route: east, north, capped walk',
+    () {
+      final motion = CowboyMotion();
+      for (var t = 0; t <= 4; t++) {
+        final now = epoch.add(Duration(seconds: t));
+        motion.accept(
+          longitude: t * 4.3 / 111320,
+          latitude: 0,
+          accuracy: 5,
+          timestamp: now,
+          now: now,
+          onCampus: true,
+          measuredSpeed: 4.3,
+          speedAccuracy: 0.5,
+        );
+      }
+      expect(motion.walking, isTrue);
+      expect(motion.heading, closeTo(90, 0.1));
+      expect(motion.playbackRate, 1.35);
+      final now = epoch.add(const Duration(seconds: 5));
+      motion.accept(
+        longitude: 4 * 4.3 / 111320,
+        latitude: 4.3 / 111320,
+        accuracy: 5,
+        timestamp: now,
+        now: now,
+        onCampus: true,
+        measuredSpeed: 4.3,
+        speedAccuracy: 0.5,
+      );
+      expect(motion.heading, closeTo(0, 0.1));
+      expect(motion.walking, isTrue);
+    },
+  );
+  test(
     'SIMULATED cadence: 12–20m accuracy no longer expires walk evidence',
     () {
       for (final accuracy in [12.0, 20.0]) {

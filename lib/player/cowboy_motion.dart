@@ -88,11 +88,17 @@ class CowboyMotion {
     }
     _anchor = fix;
     final derivedSpeed = distance / seconds;
-    final travelSpeed = hasSpeed ? measuredSpeed : derivedSpeed;
-    if (derivedSpeed > 3.5 ||
-        travelSpeed < 0.45 ||
-        travelSpeed > 3.5 ||
-        seconds < 0.5) {
+    // GPS displacement owns movement and course. Simulator/provider velocity
+    // can lag behind a mode/route change; use it only to corroborate movement.
+    final corroborated =
+        hasSpeed &&
+        (measuredSpeed - derivedSpeed).abs() <=
+            math.max(1.0, speedAccuracy * 2);
+    final travelSpeed = derivedSpeed;
+    // The cartographic player walks during credible travel, including a route
+    // replay above human walking pace. Clip speed stays capped below; a modest
+    // emulator route must not freeze both gait and facing. Jumps still reject.
+    if (travelSpeed < 0.45 || travelSpeed > 12 || seconds < 0.5) {
       _idle();
       return;
     }
@@ -103,7 +109,7 @@ class CowboyMotion {
     }
     heading = nextHeading;
     _credibleSegments++;
-    walking = _credibleSegments >= 2 || (hasSpeed && measuredSpeed >= 0.5);
+    walking = _credibleSegments >= 2 || (corroborated && measuredSpeed >= 0.5);
     _lastMovement = timestamp;
     speed = travelSpeed;
     playbackRate = (speed / 1.0645109415).clamp(0.8, 1.35);

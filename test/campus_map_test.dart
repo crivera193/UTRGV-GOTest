@@ -219,8 +219,8 @@ void main() {
     'reference presentation starts within academic core and leaves room ahead',
     () {
       expect(geography.contains(CampusPresentation.academicCore), isTrue);
-      expect(CampusPresentation.explorationZoom, inInclusiveRange(16.5, 17.5));
-      expect(CampusPresentation.pitch, inInclusiveRange(50, 60));
+      expect(CampusPresentation.explorationZoom, inInclusiveRange(17.5, 18.5));
+      expect(CampusPresentation.pitch, inInclusiveRange(45, 55));
       expect(CampusPresentation.explorationTopPadding(700), greaterThan(100));
       expect(CampusPresentation.explorationTopPadding(300), lessThan(100));
     },
@@ -229,7 +229,7 @@ void main() {
   test('overview and GPS following retain the chosen exploration zoom', () {
     final camera = CampusCameraSession()..initialize(390);
     final initial = camera.explorationZoom;
-    expect(initial, inInclusiveRange(16, 17.5));
+    expect(initial, inInclusiveRange(17, 18.5));
     camera.rememberZoom(18.2);
     camera.viewCampus();
     camera.rememberZoom(14.1);

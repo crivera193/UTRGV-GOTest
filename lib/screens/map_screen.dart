@@ -296,7 +296,7 @@ class _MapScreenState extends State<MapScreen>
         minZoom: _minZoom,
         maxZoom: 19.5,
         minPitch: CampusPresentation.pitch,
-        maxPitch: CampusPresentation.pitch,
+        maxPitch: CampusPresentation.overviewPitch,
       ),
     );
     await map.gestures.updateSettings(
@@ -398,15 +398,21 @@ class _MapScreenState extends State<MapScreen>
     }
   }
 
-  Future<void> _fitCampusViewport() async {
+  Future<void> _fitCampusViewport({bool preserveExploration = false}) async {
     final map = _map, c = _geography;
     if (map == null || c == null || _fitting || _gameOpen) return;
     _fitting = true;
-    _following = false;
-    _cameraSession.viewCampus();
+    final keepExploration = preserveExploration && !_cameraSession.isOverview;
+    if (!keepExploration) {
+      _following = false;
+      _cameraSession.viewCampus();
+    }
     // Compute whole-campus fit for the actual viewport. Center and pitch bounds
     // stay enforced even while the minimum zoom is recalculated on resize.
     try {
+      final explorationCamera = keepExploration
+          ? await map.getCameraState()
+          : null;
       await map.gestures.updateSettings(
         GesturesSettings(
           scrollEnabled: false,
@@ -420,7 +426,7 @@ class _MapScreenState extends State<MapScreen>
       final fit = await map.cameraForCoordinatesPadding(
         c.outerPoints.map(_point).toList(),
         CameraOptions(
-          pitch: CampusPresentation.pitch,
+          pitch: CampusPresentation.overviewPitch,
           bearing: 0,
           padding: _padding,
         ),
@@ -430,8 +436,19 @@ class _MapScreenState extends State<MapScreen>
       );
       _minZoom = (fit.zoom ?? 14).clamp(12, 19.5);
       await map.setBounds(CameraBoundsOptions(minZoom: _minZoom));
-      fit.padding = _padding;
-      await _moveCamera(fit);
+      if (explorationCamera != null) {
+        // Resize recalculates limits without switching exploration to overview.
+        await _moveCamera(
+          CameraOptions(
+            center: explorationCamera.center,
+            zoom: _cameraSession.explorationZoom,
+            padding: _explorationPadding,
+          ),
+        );
+      } else {
+        fit.padding = _padding;
+        await _moveCamera(fit);
+      }
     } finally {
       _fitting = false;
       await map.gestures.updateSettings(
@@ -459,7 +476,9 @@ class _MapScreenState extends State<MapScreen>
       CameraOptions(
         center: _point(c.clampCameraCenter(center)),
         zoom: (camera.zoom ?? 17).clamp(_minZoom, 19.5),
-        pitch: CampusPresentation.pitch,
+        pitch: _cameraSession.isOverview
+            ? CampusPresentation.overviewPitch
+            : CampusPresentation.pitch,
         bearing: 0,
         padding: camera.padding ?? _explorationPadding,
       ),
@@ -516,10 +535,10 @@ class _MapScreenState extends State<MapScreen>
     }
   }
 
-  Future<void> _refitCampusViewport() async {
+  Future<void> _refitCampusViewport({bool preserveExploration = false}) async {
     if (_gameOpen) return;
     try {
-      await _fitCampusViewport();
+      await _fitCampusViewport(preserveExploration: preserveExploration);
     } catch (_) {
       if (mounted) {
         setState(
@@ -553,10 +572,16 @@ class _MapScreenState extends State<MapScreen>
     } else {
       _positions =
           gps.Geolocator.getPositionStream(
-            locationSettings: const gps.LocationSettings(
-              accuracy: gps.LocationAccuracy.high,
-              distanceFilter: 0,
-            ),
+            locationSettings: Platform.isAndroid
+                ? gps.AndroidSettings(
+                    accuracy: gps.LocationAccuracy.high,
+                    distanceFilter: 0,
+                    intervalDuration: const Duration(seconds: 1),
+                  )
+                : const gps.LocationSettings(
+                    accuracy: gps.LocationAccuracy.high,
+                    distanceFilter: 0,
+                  ),
           ).listen(
             (p) {
               if (!mounted ||
@@ -1097,7 +1122,9 @@ class _MapScreenState extends State<MapScreen>
           _size = size;
           if (previous != null && _ready) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
-              if (mounted) unawaited(_refitCampusViewport());
+              if (mounted) {
+                unawaited(_refitCampusViewport(preserveExploration: true));
+              }
             });
           }
         }
